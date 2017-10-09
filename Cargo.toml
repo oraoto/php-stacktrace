@@ -1,0 +1,10 @@
+[package]
+name = "php-stacktrace"
+version = "0.1.0"
+authors = ["Oraoto <melegant2@gmail.com>"]
+
+[dependencies]
+elf = "0.0.10"
+regex = "0.2.2"
+gimli = "0.14.0"
+byteorder = "1.1.0"
