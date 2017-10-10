@@ -1,9 +1,8 @@
 #![feature(try_from)]
-#[macro_use]
-extern crate log;
 
 pub mod dwarf;
 extern crate byteorder;
+extern crate clap;
 extern crate libc;
 extern crate read_process_memory;
 extern crate regex;
@@ -16,15 +15,95 @@ use regex::Regex;
 use read_process_memory::*;
 use std::process::{Command, Stdio};
 use std::io::Cursor;
+use std::thread;
+use std::time::Duration;
+use std::collections::{HashMap, HashSet};
 use byteorder::{NativeEndian, ReadBytesExt};
+use clap::{App, Arg, ArgMatches};
+
+fn parse_args() -> ArgMatches<'static> {
+    App::new("php-stacktrace")
+        .version("0.1")
+        .about("Sampling profiler for PHP programs")
+        .arg(
+            Arg::with_name("COMMAND")
+                .help("trace or top or oneshot")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            Arg::with_name("DEBUGINFO")
+                .help("Path to php debuginfo")
+                .required(true)
+                .index(2),
+        )
+        .arg(
+            Arg::with_name("PID")
+                .help("PID of the PHP process you want to profile")
+                .required(true)
+                .index(3),
+        )
+        .get_matches()
+}
 
 fn main() {
-    let dwarf = parse_dwarf_file(String::from("./ref/php.dwz"));
-    let pid: pid_t = "8759".parse().unwrap();
+    let matches = parse_args();
+    let pid: pid_t = matches.value_of("PID").unwrap().parse().unwrap();
+    let path: String = matches.value_of("DEBUGINFO").unwrap().parse().unwrap();
+    let command = matches.value_of("COMMAND").unwrap();
+
+    let dwarf = parse_dwarf_file(path);
     let source = pid.try_into_process_handle().unwrap();
     let debug_info = get_debug_info(pid, dwarf);
-    let stack_trace = get_stack_trace(&source, &debug_info);
-    println!("{:?}", stack_trace);
+
+    let mut method_stats = HashMap::new();
+    let mut method_own_time_stats = HashMap::new();
+    let mut j = 0;
+
+    match command {
+        "top" => loop {
+            j += 1;
+            let trace = get_stack_trace(&source, &debug_info);
+            for item in &trace {
+                println!("{}", item);
+            }
+            let mut seen = HashSet::new();
+            for item in &trace {
+                if !seen.contains(&item.clone()) {
+                    let counter = method_stats.entry(item.clone()).or_insert(0);
+                    *counter += 1;
+                }
+                seen.insert(item.clone());
+            }
+            {
+                let counter2 = method_own_time_stats.entry(trace[0].clone()).or_insert(0);
+                *counter2 += 1;
+            }
+            if j % 100 == 0 {
+                print_method_stats(&method_stats, &method_own_time_stats, 30);
+                method_stats = HashMap::new();
+                method_own_time_stats = HashMap::new();
+            }
+            thread::sleep(Duration::from_millis(10));
+        },
+        "trace" => loop {
+            let trace = get_stack_trace(&source, &debug_info);
+            for item in &trace {
+                println!("{}", item);
+            }
+            println!("{}", 1);
+            thread::sleep(Duration::from_millis(10));
+        },
+        "oneshot" => {
+            let trace = get_stack_trace(&source, &debug_info);
+            for item in &trace {
+                println!("{}", item);
+            }
+        }
+        _ => {
+            println!("COMMAND must be trace/top/oneshot");
+        }
+    }
 }
 
 fn get_debug_info(pid: pid_t, dwarf: DwarfLookup) -> DebugInfo {
@@ -130,11 +209,10 @@ fn copy_address_raw<T>(addr: *const c_void, length: usize, source: &T) -> Vec<u8
 where
     T: CopyAddress,
 {
-    debug!("copy_address_raw: addr: {:x}", addr as usize);
     let mut copy = vec![0; length];
     match source.copy_address(addr as usize, &mut copy) {
         Ok(_) => {}
-        Err(e) => warn!("copy_address failed for {:p}: {:?}", addr, e),
+        Err(e) => panic!("copy_address failed for {:p}: {:?}", addr, e),
     }
     copy
 }
@@ -167,7 +245,6 @@ fn get_nm_address(pid: pid_t) -> usize {
     });
     let address_str = cap.get(1).unwrap().as_str();
     let addr = usize::from_str_radix(address_str, 16).unwrap();
-    debug!("get_nm_address: {:x}", addr);
     addr
 }
 
@@ -191,7 +268,6 @@ fn get_maps_address(pid: pid_t) -> usize {
     let cap = re.captures(&output).unwrap();
     let address_str = cap.get(1).unwrap().as_str();
     let addr = usize::from_str_radix(address_str, 16).unwrap();
-    debug!("get_maps_address: {:x}", addr);
     addr
 }
 
@@ -267,4 +343,27 @@ where
         addr = prev_execute_data_addr;
     }
     return stack_trace;
+}
+
+// from ruby-stacktrace[https://github.com/jvns/ruby-stacktrace/blob/master/src/lib.rs#L173]
+pub fn print_method_stats(
+    method_stats: &HashMap<String, u32>,
+    method_own_time_stats: &HashMap<String, u32>,
+    n_terminal_lines: usize,
+) {
+    println!("[{}c", 27 as char); // clear the screen
+    let mut count_vec: Vec<_> = method_own_time_stats.iter().collect();
+    count_vec.sort_by(|a, b| b.1.cmp(a.1));
+    println!(" {:4} | {:4} | {}", "self", "tot", "method");
+    let self_sum: u32 = method_own_time_stats.values().fold(0, std::ops::Add::add);
+    let total_sum: u32 = *method_stats.values().max().unwrap();
+    for &(method, count) in count_vec.iter().take(n_terminal_lines - 1) {
+        let total_count = method_stats.get(&method[..]).unwrap();
+        println!(
+            " {:02.1}% | {:02.1}% | {}",
+            100.0 * (*count as f32) / (self_sum as f32),
+            100.0 * (*total_count as f32) / (total_sum as f32),
+            method
+        );
+    }
 }
