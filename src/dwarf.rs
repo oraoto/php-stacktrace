@@ -1,5 +1,5 @@
-extern crate gimli;
 extern crate elf;
+extern crate gimli;
 
 use self::gimli::*;
 use std::collections::HashMap;
@@ -265,7 +265,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                                 cmember.byte_offset = parse_attr_usize(attr) / 8
                             }
                             gimli::DW_AT_type => cmember.type_id = parse_attr_at_type(attr, unit),
-                            _ => ()
+                            _ => (),
                         }
                     }
                     if prev_entry_offset.is_some() {
@@ -433,7 +433,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                     &pointer_lookup,
                     &union_lookup,
                     &enum_lookup,
-                    &const_lookup
+                    &const_lookup,
                 );
             }
             member.byte_size = size;
@@ -455,7 +455,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                     &pointer_lookup,
                     &union_lookup_clone,
                     &enum_lookup,
-                    &const_lookup
+                    &const_lookup,
                 );
             }
             member.byte_size = size;
@@ -464,11 +464,15 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
     }
 
     DwarfLookup {
-        struct_lookup, union_lookup, struct_name_lookup, union_name_lookup
+        struct_lookup,
+        union_lookup,
+        struct_name_lookup,
+        union_name_lookup,
     }
 }
 
-fn get_type_size(id: usize,
+fn get_type_size(
+    id: usize,
     kind_lookup: &HashMap<usize, EntryKind>,
     typedef_lookup: &HashMap<usize, CTypeDef>,
     struct_lookup: &HashMap<usize, CStruct>,
@@ -477,9 +481,8 @@ fn get_type_size(id: usize,
     pointer_lookup: &HashMap<usize, CPointer>,
     union_lookup: &HashMap<usize, CUnion>,
     enum_lookup: &HashMap<usize, CEnum>,
-    const_lookup: &HashMap<usize, CConst>
+    const_lookup: &HashMap<usize, CConst>,
 ) -> usize {
-
     let mut id = id;
     let mut tries = 0;
     let mut count = 1;
@@ -503,7 +506,7 @@ fn get_type_size(id: usize,
             &EntryKind::TypeDef => id = typedef_lookup.get(&id).unwrap().type_id,
             &EntryKind::Const => id = const_lookup.get(&id).unwrap().type_id,
             &EntryKind::Array => {
-                let arr  = array_lookup.get(&id).unwrap();
+                let arr = array_lookup.get(&id).unwrap();
                 count = arr.count;
                 id = arr.type_id;
             }
@@ -553,17 +556,17 @@ where
 }
 
 impl DwarfLookup {
-    pub fn find_struct(&self, name: String)-> Option<&CStruct> {
+    pub fn find_struct(&self, name: String) -> Option<&CStruct> {
         match self.struct_name_lookup.get(&name) {
             None => None,
-            Some(&id) => self.find_struct_by_id(id)
+            Some(&id) => self.find_struct_by_id(id),
         }
     }
 
-    pub fn find_union(&self, name: String)-> Option<&CUnion> {
+    pub fn find_union(&self, name: String) -> Option<&CUnion> {
         match self.union_name_lookup.get(&name) {
             None => None,
-            Some(&id) => self.find_union_by_id(id)
+            Some(&id) => self.find_union_by_id(id),
         }
     }
 

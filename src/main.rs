@@ -61,57 +61,51 @@ fn main() {
     let mut j = 0;
 
     match command {
-        "top" => {
-            loop {
-                j += 1;
-                let trace = get_stack_trace(&source, &debug_info);
-                let mut seen = HashSet::new();
+        "top" => loop {
+            j += 1;
+            let trace = get_stack_trace(&source, &debug_info);
+            let mut seen = HashSet::new();
+            for item in &trace {
+                if !seen.contains(&item.clone()) {
+                    let counter = method_stats.entry(item.clone()).or_insert(0);
+                    *counter += 1;
+                }
+                seen.insert(item.clone());
+            }
+            {
+                if trace.len() > 0 {
+                    let counter2 = method_own_time_stats.entry(trace[0].clone()).or_insert(0);
+                    *counter2 += 1;
+                }
+            }
+            if j % 100 == 0 {
+                print_method_stats(&method_stats, &method_own_time_stats, 30);
+                method_stats = HashMap::new();
+                method_own_time_stats = HashMap::new();
+            }
+            thread::sleep(Duration::from_millis(10));
+        },
+        "trace" => loop {
+            let trace = get_stack_trace(&source, &debug_info);
+            if trace.len() > 0 {
                 for item in &trace {
-                    if !seen.contains(&item.clone()) {
-                        let counter = method_stats.entry(item.clone()).or_insert(0);
-                        *counter += 1;
-                    }
-                    seen.insert(item.clone());
+                    println!("{}", item);
                 }
-                {
-                    if trace.len() > 0 {
-                        let counter2 = method_own_time_stats.entry(trace[0].clone()).or_insert(0);
-                        *counter2 += 1;
-                    }
+                println!("{}", 1);
+            }
+            thread::sleep(Duration::from_millis(10));
+        },
+        "oneshot" => loop {
+            let trace = get_stack_trace(&source, &debug_info);
+            if trace.len() > 0 {
+                for item in &trace {
+                    println!("{}", item);
                 }
-                if j % 100 == 0 {
-                    print_method_stats(&method_stats, &method_own_time_stats, 30);
-                    method_stats = HashMap::new();
-                    method_own_time_stats = HashMap::new();
-                }
+                break;
+            } else {
                 thread::sleep(Duration::from_millis(10));
             }
         },
-        "trace" => {
-            loop {
-                let trace = get_stack_trace(&source, &debug_info);
-                if trace.len() > 0 {
-                    for item in &trace {
-                        println!("{}", item);
-                    }
-                    println!("{}", 1);
-                }
-                thread::sleep(Duration::from_millis(10));
-            }
-        },
-        "oneshot" => {
-            loop {
-                let trace = get_stack_trace(&source, &debug_info);
-                if trace.len() > 0 {
-                    for item in &trace {
-                        println!("{}", item);
-                    }
-                    break;
-                } else {
-                    thread::sleep(Duration::from_millis(10));
-                }
-            }
-        }
         _ => {
             println!("COMMAND must be trace/top/oneshot");
         }
@@ -227,7 +221,7 @@ where
     let mut copy = vec![0; length];
     match source.copy_address(addr as usize, &mut copy) {
         Ok(_) => Some(copy),
-        Err(_) => None
+        Err(_) => None,
     }
 }
 
@@ -293,7 +287,7 @@ where
     let data = copy_address_raw(pointer_addr as *const c_void, 8, source);
     match data {
         Some(d) => Some(get_pointer_address(&d)),
-        None => None
+        None => None,
     }
 }
 
@@ -319,7 +313,7 @@ where
     let mdata = copy_address_raw(addr as *const c_void, 8, source);
     match mdata {
         Some(d) => Some(get_pointer_address(&d)),
-        None => None
+        None => None,
     }
 }
 
@@ -395,10 +389,11 @@ where
 }
 
 // modify from ruby-stacktrace[https://github.com/jvns/ruby-stacktrace/blob/master/src/lib.rs#L173]
-pub fn print_method_stats(method_stats: &HashMap<String, u32>,
-method_own_time_stats: &HashMap<String, u32>,
-                      n_terminal_lines: usize) {
-
+pub fn print_method_stats(
+    method_stats: &HashMap<String, u32>,
+    method_own_time_stats: &HashMap<String, u32>,
+    n_terminal_lines: usize,
+) {
     let mut count_vec: Vec<_> = method_own_time_stats.iter().collect();
     count_vec.sort_by(|a, b| b.1.cmp(a.1));
     let self_sum: u32 = method_own_time_stats.values().fold(0, std::ops::Add::add);
@@ -414,9 +409,11 @@ method_own_time_stats: &HashMap<String, u32>,
     println!(" {:4} | {:4} | {}", "self", "tot", "method");
     for &(method, count) in count_vec.iter().take(n_terminal_lines - 1) {
         let total_count = method_stats.get(&method[..]).unwrap();
-        println!(" {:02.1}% | {:02.1}% | {}",
-                 100.0 * (*count as f32) / (self_sum as f32),
-                 100.0 * (*total_count as f32) / (total_sum as f32),
-                 method);
+        println!(
+            " {:02.1}% | {:02.1}% | {}",
+            100.0 * (*count as f32) / (self_sum as f32),
+            100.0 * (*total_count as f32) / (total_sum as f32),
+            method
+        );
     }
 }
