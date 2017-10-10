@@ -37,9 +37,9 @@ struct CArray {
 }
 
 #[derive(Debug, Clone)]
-struct CUnion {
+pub struct CUnion {
     name: String,
-    byte_size: usize,
+    pub byte_size: usize,
     members: HashMap<String, CMember>,
 }
 
@@ -70,17 +70,17 @@ struct CBaseType {
 }
 
 #[derive(Debug, Clone)]
-struct CMember {
+pub struct CMember {
     name: String,
-    byte_size: usize,
-    byte_offset: usize,
-    type_id: usize,
+    pub byte_size: usize,
+    pub byte_offset: usize,
+    pub type_id: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct CStruct {
     name: String,
-    byte_size: usize,
+    pub byte_size: usize,
     members: HashMap<String, CMember>,
 }
 
@@ -228,17 +228,27 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 gimli::DW_TAG_structure_type => {
                     let mut cstruct = CStruct::new();
                     let mut attrs = entry.attrs();
+                    let mut declaration = false;
                     while let Ok(Some(attr)) = attrs.next() {
                         match attr.name() {
                             gimli::DW_AT_name => cstruct.name = parse_attr_string(attr, debug_str),
                             gimli::DW_AT_byte_size => cstruct.byte_size = parse_attr_usize(attr),
                             gimli::DW_AT_bit_size => cstruct.byte_size = parse_attr_usize(attr) / 8,
+                            gimli::DW_AT_declaration => {
+                                if let gimli::AttributeValue::Flag(flag) = attr.value() {
+                                    declaration = flag;
+                                }
+                            }
                             _ => (),
                         }
                     }
-                    prev_entry_offset = Some(entry_offset);
-                    struct_lookup.insert(entry_offset, cstruct);
-                    kind_lookup.insert(entry_offset, EntryKind::Struct);
+                    if !declaration {
+                        prev_entry_offset = Some(entry_offset);
+                        struct_lookup.insert(entry_offset, cstruct);
+                        kind_lookup.insert(entry_offset, EntryKind::Struct);
+                    } else {
+                        prev_entry_offset = None;
+                    }
                 }
 
                 gimli::DW_TAG_member => {
@@ -344,17 +354,27 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 gimli::DW_TAG_union_type => {
                     let mut cunion = CUnion::new();
                     let mut attrs = entry.attrs();
+                    let mut declaration = false;
                     while let Ok(Some(attr)) = attrs.next() {
                         match attr.name() {
                             gimli::DW_AT_name => cunion.name = parse_attr_string(attr, debug_str),
                             gimli::DW_AT_byte_size => cunion.byte_size = parse_attr_usize(attr),
                             gimli::DW_AT_bit_size => cunion.byte_size = parse_attr_usize(attr) / 8,
+                            gimli::DW_AT_declaration => {
+                                if let gimli::AttributeValue::Flag(flag) = attr.value() {
+                                    declaration = flag;
+                                }
+                            }
                             _ => (),
                         }
                     }
-                    prev_entry_offset = Some(entry_offset);
-                    union_lookup.insert(entry_offset, cunion);
-                    kind_lookup.insert(entry_offset, EntryKind::Union);
+                    if !declaration {
+                        prev_entry_offset = Some(entry_offset);
+                        union_lookup.insert(entry_offset, cunion);
+                        kind_lookup.insert(entry_offset, EntryKind::Union);
+                    } else {
+                        prev_entry_offset = None;
+                    }
                 }
 
                 gimli::DW_TAG_enumeration_type => {
@@ -529,5 +549,41 @@ where
             Err(_) => String::new(),
         },
         _ => String::new(),
+    }
+}
+
+impl DwarfLookup {
+    pub fn find_struct(&self, name: String)-> Option<&CStruct> {
+        match self.struct_name_lookup.get(&name) {
+            None => None,
+            Some(&id) => self.find_struct_by_id(id)
+        }
+    }
+
+    pub fn find_union(&self, name: String)-> Option<&CUnion> {
+        match self.union_name_lookup.get(&name) {
+            None => None,
+            Some(&id) => self.find_union_by_id(id)
+        }
+    }
+
+    pub fn find_struct_by_id(&self, id: usize) -> Option<&CStruct> {
+        self.struct_lookup.get(&id)
+    }
+
+    pub fn find_union_by_id(&self, id: usize) -> Option<&CUnion> {
+        self.union_lookup.get(&id)
+    }
+}
+
+impl CStruct {
+    pub fn find_member(&self, name: String) -> Option<&CMember> {
+        self.members.get(&name)
+    }
+}
+
+impl CUnion {
+    pub fn find_member(&self, name: String) -> Option<&CMember> {
+        self.members.get(&name)
     }
 }
