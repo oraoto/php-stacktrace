@@ -61,43 +61,55 @@ fn main() {
     let mut j = 0;
 
     match command {
-        "top" => loop {
-            j += 1;
-            let trace = get_stack_trace(&source, &debug_info);
-            for item in &trace {
-                println!("{}", item);
-            }
-            let mut seen = HashSet::new();
-            for item in &trace {
-                if !seen.contains(&item.clone()) {
-                    let counter = method_stats.entry(item.clone()).or_insert(0);
-                    *counter += 1;
+        "top" => {
+            loop {
+                j += 1;
+                let trace = get_stack_trace(&source, &debug_info);
+                let mut seen = HashSet::new();
+                for item in &trace {
+                    if !seen.contains(&item.clone()) {
+                        let counter = method_stats.entry(item.clone()).or_insert(0);
+                        *counter += 1;
+                    }
+                    seen.insert(item.clone());
                 }
-                seen.insert(item.clone());
+                {
+                    if trace.len() > 0 {
+                        let counter2 = method_own_time_stats.entry(trace[0].clone()).or_insert(0);
+                        *counter2 += 1;
+                    }
+                }
+                if j % 100 == 0 {
+                    print_method_stats(&method_stats, &method_own_time_stats, 30);
+                    method_stats = HashMap::new();
+                    method_own_time_stats = HashMap::new();
+                }
+                thread::sleep(Duration::from_millis(10));
             }
-            {
-                let counter2 = method_own_time_stats.entry(trace[0].clone()).or_insert(0);
-                *counter2 += 1;
-            }
-            if j % 100 == 0 {
-                print_method_stats(&method_stats, &method_own_time_stats, 30);
-                method_stats = HashMap::new();
-                method_own_time_stats = HashMap::new();
-            }
-            thread::sleep(Duration::from_millis(10));
         },
-        "trace" => loop {
-            let trace = get_stack_trace(&source, &debug_info);
-            for item in &trace {
-                println!("{}", item);
+        "trace" => {
+            loop {
+                let trace = get_stack_trace(&source, &debug_info);
+                if trace.len() > 0 {
+                    for item in &trace {
+                        println!("{}", item);
+                    }
+                    println!("{}", 1);
+                }
+                thread::sleep(Duration::from_millis(10));
             }
-            println!("{}", 1);
-            thread::sleep(Duration::from_millis(10));
         },
         "oneshot" => {
-            let trace = get_stack_trace(&source, &debug_info);
-            for item in &trace {
-                println!("{}", item);
+            loop {
+                let trace = get_stack_trace(&source, &debug_info);
+                if trace.len() > 0 {
+                    for item in &trace {
+                        println!("{}", item);
+                    }
+                    break;
+                } else {
+                    thread::sleep(Duration::from_millis(10));
+                }
             }
         }
         _ => {
@@ -205,16 +217,18 @@ fn get_usize(vec: &[u8]) -> usize {
     usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
 }
 
-fn copy_address_raw<T>(addr: *const c_void, length: usize, source: &T) -> Vec<u8>
+fn copy_address_raw<T>(addr: *const c_void, length: usize, source: &T) -> Option<Vec<u8>>
 where
     T: CopyAddress,
 {
+    if (length > 10240) {
+        return None;
+    }
     let mut copy = vec![0; length];
     match source.copy_address(addr as usize, &mut copy) {
-        Ok(_) => {}
-        Err(e) => panic!("copy_address failed for {:p}: {:?}", addr, e),
+        Ok(_) => Some(copy),
+        Err(_) => None
     }
-    copy
 }
 
 fn get_executor_globals_address(pid: pid_t) -> usize {
@@ -271,15 +285,19 @@ fn get_maps_address(pid: pid_t) -> usize {
     addr
 }
 
-fn get_current_execute_data_address<T>(source: &T, info: &DebugInfo) -> usize
+fn get_current_execute_data_address<T>(source: &T, info: &DebugInfo) -> Option<usize>
 where
     T: CopyAddress,
 {
     let pointer_addr = info.executor_globals_address + info.current_execute_data_offset;
-    get_pointer_address(&copy_address_raw(pointer_addr as *const c_void, 8, source))
+    let data = copy_address_raw(pointer_addr as *const c_void, 8, source);
+    match data {
+        Some(d) => Some(get_pointer_address(&d)),
+        None => None
+    }
 }
 
-fn read_execute_data<T>(addr: usize, source: &T, info: &DebugInfo) -> Vec<u8>
+fn read_execute_data<T>(addr: usize, source: &T, info: &DebugInfo) -> Option<Vec<u8>>
 where
     T: CopyAddress,
 {
@@ -293,12 +311,16 @@ fn get_func_address(execute_data: &Vec<u8>, info: &DebugInfo) -> usize {
     usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
 }
 
-fn read_function_name_address<T>(func_address: usize, source: &T, info: &DebugInfo) -> usize
+fn read_function_name_address<T>(func_address: usize, source: &T, info: &DebugInfo) -> Option<usize>
 where
     T: CopyAddress,
 {
     let addr = func_address + info.function_name_offset;
-    get_pointer_address(&copy_address_raw(addr as *const c_void, 8, source))
+    let mdata = copy_address_raw(addr as *const c_void, 8, source);
+    match mdata {
+        Some(d) => Some(get_pointer_address(&d)),
+        None => None
+    }
 }
 
 fn get_prev_execute_data_address(execute_data: &Vec<u8>, info: &DebugInfo) -> usize {
@@ -307,63 +329,94 @@ fn get_prev_execute_data_address(execute_data: &Vec<u8>, info: &DebugInfo) -> us
     usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
 }
 
-fn read_zend_string<T>(addr: usize, source: &T, info: &DebugInfo) -> String
+fn read_zend_string<T>(addr: usize, source: &T, info: &DebugInfo) -> Option<String>
 where
     T: CopyAddress,
 {
     let len_addr = addr + info.zend_string_len_offset;
     let val_addr = addr + info.zend_string_val_offset;
-    let len = get_usize(&copy_address_raw(len_addr as *const c_void, 8, source));
+    let len_data = copy_address_raw(len_addr as *const c_void, 8, source);
+    if len_data.is_none() {
+        return None;
+    }
+    let len = get_usize(&len_data.unwrap());
     let data = copy_address_raw(val_addr as *const c_void, len, source);
-    String::from_utf8(data).unwrap()
+    if data.is_none() {
+        return None;
+    }
+    String::from_utf8(data.unwrap()).ok()
 }
 
 fn get_stack_trace<T>(source: &T, info: &DebugInfo) -> Vec<String>
 where
     T: CopyAddress,
 {
-    let mut addr = get_current_execute_data_address(source, info);
+    let maddr = get_current_execute_data_address(source, info);
     let mut stack_trace = vec![];
 
+    if maddr.is_none() {
+        return stack_trace;
+    }
+
+    let mut addr = maddr.unwrap();
+
     while addr != 0 {
-        let execute_data = read_execute_data(addr, source, info);
+        let mexecute_data = read_execute_data(addr, source, info);
+        if mexecute_data.is_none() {
+            return stack_trace;
+        }
+        let execute_data = mexecute_data.unwrap();
+
         let func_addr = get_func_address(&execute_data, info);
+        let mut trace = String::new();
         if func_addr == 0 {
-            stack_trace.push(String::from("???"));
+            trace.push_str("???");
         } else {
-            let function_name_addr = read_function_name_address(func_addr, source, info);
+            let mfunction_name_addr = read_function_name_address(func_addr, source, info);
+            if mfunction_name_addr.is_none() {
+                return stack_trace;
+            }
+            let function_name_addr = mfunction_name_addr.unwrap();
+
             if function_name_addr != 0 {
                 let function_name = read_zend_string(function_name_addr, source, info);
-                stack_trace.push(function_name);
+                if function_name.is_some() {
+                    trace.push_str(function_name.unwrap().as_str());
+                }
             } else {
-                stack_trace.push(String::from("main"));
+                trace.push_str("main");
             }
         }
+        stack_trace.push(trace);
         let prev_execute_data_addr = get_prev_execute_data_address(&execute_data, info);
         addr = prev_execute_data_addr;
     }
     return stack_trace;
 }
 
-// from ruby-stacktrace[https://github.com/jvns/ruby-stacktrace/blob/master/src/lib.rs#L173]
-pub fn print_method_stats(
-    method_stats: &HashMap<String, u32>,
-    method_own_time_stats: &HashMap<String, u32>,
-    n_terminal_lines: usize,
-) {
-    println!("[{}c", 27 as char); // clear the screen
+// modify from ruby-stacktrace[https://github.com/jvns/ruby-stacktrace/blob/master/src/lib.rs#L173]
+pub fn print_method_stats(method_stats: &HashMap<String, u32>,
+method_own_time_stats: &HashMap<String, u32>,
+                      n_terminal_lines: usize) {
+
     let mut count_vec: Vec<_> = method_own_time_stats.iter().collect();
     count_vec.sort_by(|a, b| b.1.cmp(a.1));
-    println!(" {:4} | {:4} | {}", "self", "tot", "method");
     let self_sum: u32 = method_own_time_stats.values().fold(0, std::ops::Add::add);
+    let stotal_sum: Option<&u32> = method_stats.values().max();
+    if stotal_sum.is_none() {
+        return;
+    }
     let total_sum: u32 = *method_stats.values().max().unwrap();
+    if count_vec.len() == 0 {
+        return;
+    }
+    println!("[{}c", 27 as char); // clear the screen
+    println!(" {:4} | {:4} | {}", "self", "tot", "method");
     for &(method, count) in count_vec.iter().take(n_terminal_lines - 1) {
         let total_count = method_stats.get(&method[..]).unwrap();
-        println!(
-            " {:02.1}% | {:02.1}% | {}",
-            100.0 * (*count as f32) / (self_sum as f32),
-            100.0 * (*total_count as f32) / (total_sum as f32),
-            method
-        );
+        println!(" {:02.1}% | {:02.1}% | {}",
+                 100.0 * (*count as f32) / (self_sum as f32),
+                 100.0 * (*total_count as f32) / (total_sum as f32),
+                 method);
     }
 }
