@@ -46,9 +46,11 @@ fn parse_args() -> ArgMatches<'static> {
         .get_matches()
 }
 
-fn main() {
+fn main()
+where Pid: TryIntoProcessHandle + std::fmt::Display + std::str::FromStr + Copy
+{
     let matches = parse_args();
-    let pid: pid_t = matches.value_of("PID").unwrap().parse().unwrap();
+    let pid: Pid = matches.value_of("PID").unwrap().parse().unwrap();
     let path: String = matches.value_of("DEBUGINFO").unwrap().parse().unwrap();
     let command = matches.value_of("COMMAND").unwrap();
 
@@ -112,7 +114,9 @@ fn main() {
     }
 }
 
-fn get_debug_info(pid: pid_t, dwarf: DwarfLookup) -> DebugInfo {
+fn get_debug_info<Pid>(pid: Pid, dwarf: DwarfLookup) -> DebugInfo
+where Pid: TryIntoProcessHandle + std::fmt::Display + Copy
+{
     let zend_executor_globals = dwarf
         .find_struct(String::from("_zend_executor_globals"))
         .unwrap();
@@ -215,7 +219,7 @@ fn copy_address_raw<T>(addr: *const c_void, length: usize, source: &T) -> Option
 where
     T: CopyAddress,
 {
-    if (length > 10240) {
+    if length > 10240 {
         return None;
     }
     let mut copy = vec![0; length];
@@ -225,11 +229,15 @@ where
     }
 }
 
-fn get_executor_globals_address(pid: pid_t) -> usize {
+fn get_executor_globals_address<Pid>(pid: Pid) -> usize
+where Pid: TryIntoProcessHandle + std::fmt::Display + Copy
+{
     get_maps_address(pid) + get_nm_address(pid)
 }
 
-fn get_nm_address(pid: pid_t) -> usize {
+fn get_nm_address<Pid>(pid: Pid) -> usize
+where Pid: TryIntoProcessHandle + std::fmt::Display
+{
     let nm_command = Command::new("nm")
         .arg("-D")
         .arg((format!("/proc/{}/exe", pid)))
@@ -256,7 +264,9 @@ fn get_nm_address(pid: pid_t) -> usize {
     addr
 }
 
-fn get_maps_address(pid: pid_t) -> usize {
+fn get_maps_address<Pid>(pid: Pid) -> usize
+where Pid: TryIntoProcessHandle + std::fmt::Display
+{
     let cat_command = Command::new("cat")
         .arg(format!("/proc/{}/maps", pid))
         .stdout(Stdio::piped())
