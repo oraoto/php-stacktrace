@@ -17,20 +17,13 @@ use std::process::{Command, Stdio};
 use std::io::Cursor;
 use std::thread;
 use std::time::Duration;
-use std::collections::{HashMap, HashSet};
 use byteorder::{NativeEndian, ReadBytesExt};
 use clap::{App, Arg, ArgMatches};
 
 fn parse_args() -> ArgMatches<'static> {
     App::new("php-stacktrace")
         .version("0.1")
-        .about("Sampling profiler for PHP programs")
-        .arg(
-            Arg::with_name("COMMAND")
-                .help("trace or top or oneshot")
-                .required(true)
-                .index(1),
-        )
+        .about("Read stacktrace from outside PHP process")
         .arg(
             Arg::with_name("DEBUGINFO")
                 .help("Path to php debuginfo")
@@ -47,75 +40,32 @@ fn parse_args() -> ArgMatches<'static> {
 }
 
 fn main()
-where Pid: TryIntoProcessHandle + std::fmt::Display + std::str::FromStr + Copy
+where
+    Pid: TryIntoProcessHandle + std::fmt::Display + std::str::FromStr + Copy,
 {
     let matches = parse_args();
     let pid: Pid = matches.value_of("PID").unwrap().parse().unwrap();
     let path: String = matches.value_of("DEBUGINFO").unwrap().parse().unwrap();
-    let command = matches.value_of("COMMAND").unwrap();
-
     let dwarf = parse_dwarf_file(path);
     let source = pid.try_into_process_handle().unwrap();
     let debug_info = get_debug_info(pid, dwarf);
 
-    let mut method_stats = HashMap::new();
-    let mut method_own_time_stats = HashMap::new();
-    let mut j = 0;
-
-    match command {
-        "top" => loop {
-            j += 1;
-            let trace = get_stack_trace(&source, &debug_info);
-            let mut seen = HashSet::new();
+    loop {
+        let trace = get_stack_trace(&source, &debug_info);
+        if trace.len() > 0 {
             for item in &trace {
-                if !seen.contains(&item.clone()) {
-                    let counter = method_stats.entry(item.clone()).or_insert(0);
-                    *counter += 1;
-                }
-                seen.insert(item.clone());
+                println!("{}", item);
             }
-            {
-                if trace.len() > 0 {
-                    let counter2 = method_own_time_stats.entry(trace[0].clone()).or_insert(0);
-                    *counter2 += 1;
-                }
-            }
-            if j % 100 == 0 {
-                print_method_stats(&method_stats, &method_own_time_stats, 30);
-                method_stats = HashMap::new();
-                method_own_time_stats = HashMap::new();
-            }
+            break;
+        } else {
             thread::sleep(Duration::from_millis(10));
-        },
-        "trace" => loop {
-            let trace = get_stack_trace(&source, &debug_info);
-            if trace.len() > 0 {
-                for item in &trace {
-                    println!("{}", item);
-                }
-                println!("{}", 1);
-            }
-            thread::sleep(Duration::from_millis(10));
-        },
-        "oneshot" => loop {
-            let trace = get_stack_trace(&source, &debug_info);
-            if trace.len() > 0 {
-                for item in &trace {
-                    println!("{}", item);
-                }
-                break;
-            } else {
-                thread::sleep(Duration::from_millis(10));
-            }
-        },
-        _ => {
-            println!("COMMAND must be trace/top/oneshot");
         }
     }
 }
 
 fn get_debug_info<Pid>(pid: Pid, dwarf: DwarfLookup) -> DebugInfo
-where Pid: TryIntoProcessHandle + std::fmt::Display + Copy
+where
+    Pid: TryIntoProcessHandle + std::fmt::Display + Copy,
 {
     let zend_executor_globals = dwarf
         .find_struct(String::from("_zend_executor_globals"))
@@ -230,13 +180,15 @@ where
 }
 
 fn get_executor_globals_address<Pid>(pid: Pid) -> usize
-where Pid: TryIntoProcessHandle + std::fmt::Display + Copy
+where
+    Pid: TryIntoProcessHandle + std::fmt::Display + Copy,
 {
     get_maps_address(pid) + get_nm_address(pid)
 }
 
 fn get_nm_address<Pid>(pid: Pid) -> usize
-where Pid: TryIntoProcessHandle + std::fmt::Display
+where
+    Pid: TryIntoProcessHandle + std::fmt::Display,
 {
     let nm_command = Command::new("nm")
         .arg("-D")
@@ -265,7 +217,8 @@ where Pid: TryIntoProcessHandle + std::fmt::Display
 }
 
 fn get_maps_address<Pid>(pid: Pid) -> usize
-where Pid: TryIntoProcessHandle + std::fmt::Display
+where
+    Pid: TryIntoProcessHandle + std::fmt::Display,
 {
     let cat_command = Command::new("cat")
         .arg(format!("/proc/{}/maps", pid))
@@ -396,34 +349,4 @@ where
         addr = prev_execute_data_addr;
     }
     return stack_trace;
-}
-
-// modify from ruby-stacktrace[https://github.com/jvns/ruby-stacktrace/blob/master/src/lib.rs#L173]
-pub fn print_method_stats(
-    method_stats: &HashMap<String, u32>,
-    method_own_time_stats: &HashMap<String, u32>,
-    n_terminal_lines: usize,
-) {
-    let mut count_vec: Vec<_> = method_own_time_stats.iter().collect();
-    count_vec.sort_by(|a, b| b.1.cmp(a.1));
-    let self_sum: u32 = method_own_time_stats.values().fold(0, std::ops::Add::add);
-    let stotal_sum: Option<&u32> = method_stats.values().max();
-    if stotal_sum.is_none() {
-        return;
-    }
-    let total_sum: u32 = *method_stats.values().max().unwrap();
-    if count_vec.len() == 0 {
-        return;
-    }
-    println!("[{}c", 27 as char); // clear the screen
-    println!(" {:4} | {:4} | {}", "self", "tot", "method");
-    for &(method, count) in count_vec.iter().take(n_terminal_lines - 1) {
-        let total_count = method_stats.get(&method[..]).unwrap();
-        println!(
-            " {:02.1}% | {:02.1}% | {}",
-            100.0 * (*count as f32) / (self_sum as f32),
-            100.0 * (*total_count as f32) / (total_sum as f32),
-            method
-        );
-    }
 }
