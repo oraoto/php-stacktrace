@@ -28,13 +28,13 @@ fn parse_args() -> ArgMatches<'static> {
             Arg::with_name("DEBUGINFO")
                 .help("Path to php debuginfo")
                 .required(true)
-                .index(2),
+                .index(1),
         )
         .arg(
             Arg::with_name("PID")
                 .help("PID of the PHP process you want to profile")
                 .required(true)
-                .index(3),
+                .index(2),
         )
         .get_matches()
 }
