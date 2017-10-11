@@ -67,65 +67,37 @@ fn get_debug_info<Pid>(pid: Pid, dwarf: DwarfLookup) -> DebugInfo
 where
     Pid: TryIntoProcessHandle + std::fmt::Display + Copy,
 {
-    let zend_executor_globals = dwarf
-        .find_struct(String::from("_zend_executor_globals"))
-        .unwrap();
+    let zend_executor_globals = dwarf.find_struct("_zend_executor_globals").unwrap();
     let current_execute_data_offset = zend_executor_globals
-        .find_member(String::from("current_execute_data"))
+        .find_member("current_execute_data")
         .unwrap()
         .byte_offset;
-    let zend_execute_data = dwarf
-        .find_struct(String::from("_zend_execute_data"))
-        .unwrap();
-    let func_offset = zend_execute_data
-        .find_member(String::from("func"))
-        .unwrap()
-        .byte_offset;
-    let this_offset = zend_execute_data
-        .find_member(String::from("This"))
-        .unwrap()
-        .byte_offset;
+    let zend_execute_data = dwarf.find_struct("_zend_execute_data").unwrap();
+    let func_offset = zend_execute_data.find_member("func").unwrap().byte_offset;
+    let this_offset = zend_execute_data.find_member("This").unwrap().byte_offset;
     let prev_offset = zend_execute_data
-        .find_member(String::from("prev_execute_data"))
+        .find_member("prev_execute_data")
         .unwrap()
         .byte_offset;
 
-    let zend_function = dwarf.find_union(String::from("_zend_function")).unwrap();
-    let member_common = zend_function.find_member(String::from("common")).unwrap();
+    let zend_function = dwarf.find_union("_zend_function").unwrap();
+    let member_common = zend_function.find_member("common").unwrap();
     let common = dwarf.find_struct_by_id(member_common.type_id).unwrap();
-    let function_name_offset = common
-        .find_member(String::from("function_name"))
-        .unwrap()
-        .byte_offset;
+    let function_name_offset = common.find_member("function_name").unwrap().byte_offset;
 
-    let zend_string = dwarf.find_struct(String::from("_zend_string")).unwrap();
-    let zend_string_len_offset = zend_string
-        .find_member(String::from("len"))
-        .unwrap()
-        .byte_offset;
-    let zend_string_val_offset = zend_string
-        .find_member(String::from("val"))
-        .unwrap()
-        .byte_offset;
+    let zend_string = dwarf.find_struct("_zend_string").unwrap();
+    let zend_string_len_offset = zend_string.find_member("len").unwrap().byte_offset;
+    let zend_string_val_offset = zend_string.find_member("val").unwrap().byte_offset;
 
     DebugInfo {
         executor_globals_address: get_executor_globals_address(pid),
         zend_executor_globals: zend_executor_globals.clone(),
         zend_execute_data: zend_execute_data.clone(),
-        zval: dwarf
-            .find_struct(String::from("_zval_struct"))
-            .unwrap()
-            .clone(),
-        zend_value: dwarf
-            .find_union(String::from("_zend_value"))
-            .unwrap()
-            .clone(),
+        zval: dwarf.find_struct("_zval_struct").unwrap().clone(),
+        zend_value: dwarf.find_union("_zend_value").unwrap().clone(),
         zend_function: zend_function.clone(),
         zend_string: zend_string.clone(),
-        zend_class_entry: dwarf
-            .find_struct(String::from("_zend_class_entry"))
-            .unwrap()
-            .clone(),
+        zend_class_entry: dwarf.find_struct("_zend_class_entry").unwrap().clone(),
         current_execute_data_offset: current_execute_data_offset,
         func_offset: func_offset,
         this_value_offset: this_offset, // zend_value is the field of zval

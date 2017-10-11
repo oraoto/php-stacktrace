@@ -54,15 +54,6 @@ struct CConst {
     type_id: usize,
 }
 
-impl CPointer {
-    pub fn new() -> CPointer {
-        CPointer {
-            byte_size: 0,
-            type_id: 0,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 struct CBaseType {
     name: String,
@@ -88,79 +79,6 @@ pub struct CStruct {
 pub struct CTypeDef {
     name: String,
     type_id: usize,
-}
-
-impl CTypeDef {
-    pub fn new() -> CTypeDef {
-        CTypeDef {
-            name: String::new(),
-            type_id: 0,
-        }
-    }
-}
-
-impl CStruct {
-    pub fn new() -> CStruct {
-        CStruct {
-            name: String::new(),
-            byte_size: 0,
-            members: HashMap::new(),
-        }
-    }
-}
-
-impl CUnion {
-    pub fn new() -> CUnion {
-        CUnion {
-            name: String::new(),
-            byte_size: 0,
-            members: HashMap::new(),
-        }
-    }
-}
-
-impl CMember {
-    pub fn new() -> CMember {
-        CMember {
-            name: String::new(),
-            byte_size: 0,
-            byte_offset: 0,
-            type_id: 0,
-        }
-    }
-}
-
-impl CBaseType {
-    pub fn new() -> CBaseType {
-        CBaseType {
-            name: String::new(),
-            byte_size: 0,
-        }
-    }
-}
-
-impl CEnum {
-    pub fn new() -> CEnum {
-        CEnum {
-            name: String::new(),
-            byte_size: 0,
-        }
-    }
-}
-
-impl CArray {
-    pub fn new() -> CArray {
-        CArray {
-            type_id: 0,
-            count: 0,
-        }
-    }
-}
-
-impl CConst {
-    pub fn new() -> CConst {
-        CConst { type_id: 0 }
-    }
 }
 
 pub fn parse_dwarf_file(file: String) -> DwarfLookup {
@@ -556,15 +474,15 @@ where
 }
 
 impl DwarfLookup {
-    pub fn find_struct(&self, name: String) -> Option<&CStruct> {
-        match self.struct_name_lookup.get(&name) {
+    pub fn find_struct(&self, name: &str) -> Option<&CStruct> {
+        match self.struct_name_lookup.get(&String::from(name)) {
             None => None,
             Some(&id) => self.find_struct_by_id(id),
         }
     }
 
-    pub fn find_union(&self, name: String) -> Option<&CUnion> {
-        match self.union_name_lookup.get(&name) {
+    pub fn find_union(&self, name: &str) -> Option<&CUnion> {
+        match self.union_name_lookup.get(&String::from(name)) {
             None => None,
             Some(&id) => self.find_union_by_id(id),
         }
@@ -579,14 +497,90 @@ impl DwarfLookup {
     }
 }
 
+impl CPointer {
+    pub fn new() -> CPointer {
+        CPointer {
+            byte_size: 0,
+            type_id: 0,
+        }
+    }
+}
+
+impl CTypeDef {
+    pub fn new() -> CTypeDef {
+        CTypeDef {
+            name: String::new(),
+            type_id: 0,
+        }
+    }
+}
+
 impl CStruct {
-    pub fn find_member(&self, name: String) -> Option<&CMember> {
-        self.members.get(&name)
+    pub fn new() -> CStruct {
+        CStruct {
+            name: String::new(),
+            byte_size: 0,
+            members: HashMap::new(),
+        }
+    }
+    pub fn find_member(&self, name: &str) -> Option<&CMember> {
+        self.members.get(&String::from(name))
     }
 }
 
 impl CUnion {
-    pub fn find_member(&self, name: String) -> Option<&CMember> {
-        self.members.get(&name)
+    pub fn new() -> CUnion {
+        CUnion {
+            name: String::new(),
+            byte_size: 0,
+            members: HashMap::new(),
+        }
+    }
+    pub fn find_member(&self, name: &str) -> Option<&CMember> {
+        self.members.get(&String::from(name))
+    }
+}
+
+impl CMember {
+    pub fn new() -> CMember {
+        CMember {
+            name: String::new(),
+            byte_size: 0,
+            byte_offset: 0,
+            type_id: 0,
+        }
+    }
+}
+
+impl CBaseType {
+    pub fn new() -> CBaseType {
+        CBaseType {
+            name: String::new(),
+            byte_size: 0,
+        }
+    }
+}
+
+impl CEnum {
+    pub fn new() -> CEnum {
+        CEnum {
+            name: String::new(),
+            byte_size: 0,
+        }
+    }
+}
+
+impl CArray {
+    pub fn new() -> CArray {
+        CArray {
+            type_id: 0,
+            count: 0,
+        }
+    }
+}
+
+impl CConst {
+    pub fn new() -> CConst {
+        CConst { type_id: 0 }
     }
 }
