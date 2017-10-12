@@ -42,10 +42,13 @@ where
 
     let source = pid.try_into_process_handle().unwrap();
 
-    let vm_stack = get_vm_stack(&source, &debuginfo).unwrap();
-
     loop {
-        match get_stack_trace(&source, &debuginfo, &vm_stack) {
+        let vm_stack = get_vm_stack(&source, &debuginfo);
+        if vm_stack.is_err() {
+            thread::sleep(Duration::from_millis(10));
+            continue;
+        }
+        match get_stack_trace(&source, &debuginfo, &vm_stack.unwrap()) {
             Err(_) => (),
             Ok(trace) => if trace.len() > 0 {
                 for item in trace {
@@ -59,7 +62,6 @@ where
             },
         }
         thread::sleep(Duration::from_millis(10));
-        break; // todo remove
     }
 }
 
@@ -232,6 +234,10 @@ fn get_stack_trace<T>(
 where
     T: CopyAddress,
 {
+    if stack.current_ed_addr < stack.low {
+        return Err(io::Error::new(io::ErrorKind::Other, "Not execution"));
+    }
+
     let mut ed_offset = stack.current_ed_addr - stack.low;
     let mut trace = vec![];
 
