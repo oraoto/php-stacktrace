@@ -1,6 +1,6 @@
 # php-stacktrace
 
-Sampling profiler for PHP programs, inspired by [ruby-stacktrace](https://github.com/jvns/ruby-stacktrace).
+Read stacktrace from outside PHP process, inspired by [ruby-stacktrace](https://github.com/jvns/ruby-stacktrace).
 
 # Install
 
