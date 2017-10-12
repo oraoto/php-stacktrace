@@ -1,6 +1,10 @@
 #![feature(try_from)]
+#[macro_use]
+extern crate serde_derive;
 
-pub mod dwarf;
+mod debuginfo;
+mod dwarf;
+
 extern crate byteorder;
 extern crate clap;
 extern crate libc;
@@ -8,50 +12,37 @@ extern crate read_process_memory;
 extern crate regex;
 
 use std::convert::TryFrom;
-use dwarf::{parse_dwarf_file, CStruct, CUnion, DwarfLookup};
 use libc::*;
-use std::process;
-use regex::Regex;
 use read_process_memory::*;
-use std::process::{Command, Stdio};
 use std::io::Cursor;
 use std::thread;
 use std::time::Duration;
 use byteorder::{NativeEndian, ReadBytesExt};
 use clap::{App, Arg, ArgMatches};
+use debuginfo::*;
+use dwarf::*;
 
-fn parse_args() -> ArgMatches<'static> {
-    App::new("php-stacktrace")
-        .version("0.1")
-        .about("Read stacktrace from outside PHP process")
-        .arg(
-            Arg::with_name("DEBUGINFO")
-                .help("Path to php debuginfo")
-                .required(true)
-                .index(1),
-        )
-        .arg(
-            Arg::with_name("PID")
-                .help("PID of the PHP process you want to profile")
-                .required(true)
-                .index(2),
-        )
-        .get_matches()
-}
 
 fn main()
 where
     Pid: TryIntoProcessHandle + std::fmt::Display + std::str::FromStr + Copy,
 {
     let matches = parse_args();
+
     let pid: Pid = matches.value_of("PID").unwrap().parse().unwrap();
-    let path: String = matches.value_of("DEBUGINFO").unwrap().parse().unwrap();
-    let dwarf = parse_dwarf_file(path);
+
+    let debuginfo = get_debug_info(pid, &matches);
+
+    if matches.is_present("WRITE_CONFIG") {
+        write_debuginfo_to_conif(&debuginfo, matches.value_of("WRITE_CONFIG").unwrap().parse().unwrap())
+    }
+
     let source = pid.try_into_process_handle().unwrap();
-    let debug_info = get_debug_info(pid, dwarf);
+
+    println!("{:?}", debuginfo);
 
     loop {
-        let trace = get_stack_trace(&source, &debug_info);
+        let trace = get_stack_trace(&source, &debuginfo);
         if trace.len() > 0 {
             for item in &trace {
                 println!("{}", item);
@@ -63,68 +54,54 @@ where
     }
 }
 
-fn get_debug_info<Pid>(pid: Pid, dwarf: DwarfLookup) -> DebugInfo
-where
-    Pid: TryIntoProcessHandle + std::fmt::Display + Copy,
-{
-    let zend_executor_globals = dwarf.find_struct("_zend_executor_globals").unwrap();
-    let current_execute_data_offset = zend_executor_globals
-        .find_member("current_execute_data")
-        .unwrap()
-        .byte_offset;
-    let zend_execute_data = dwarf.find_struct("_zend_execute_data").unwrap();
-    let func_offset = zend_execute_data.find_member("func").unwrap().byte_offset;
-    let this_offset = zend_execute_data.find_member("This").unwrap().byte_offset;
-    let prev_offset = zend_execute_data
-        .find_member("prev_execute_data")
-        .unwrap()
-        .byte_offset;
-
-    let zend_function = dwarf.find_union("_zend_function").unwrap();
-    let member_common = zend_function.find_member("common").unwrap();
-    let common = dwarf.find_struct_by_id(member_common.type_id).unwrap();
-    let function_name_offset = common.find_member("function_name").unwrap().byte_offset;
-
-    let zend_string = dwarf.find_struct("_zend_string").unwrap();
-    let zend_string_len_offset = zend_string.find_member("len").unwrap().byte_offset;
-    let zend_string_val_offset = zend_string.find_member("val").unwrap().byte_offset;
-
-    DebugInfo {
-        executor_globals_address: get_executor_globals_address(pid),
-        zend_executor_globals: zend_executor_globals.clone(),
-        zend_execute_data: zend_execute_data.clone(),
-        zval: dwarf.find_struct("_zval_struct").unwrap().clone(),
-        zend_value: dwarf.find_union("_zend_value").unwrap().clone(),
-        zend_function: zend_function.clone(),
-        zend_string: zend_string.clone(),
-        zend_class_entry: dwarf.find_struct("_zend_class_entry").unwrap().clone(),
-        current_execute_data_offset: current_execute_data_offset,
-        func_offset: func_offset,
-        this_value_offset: this_offset, // zend_value is the field of zval
-        prev_execute_data_offset: prev_offset,
-        function_name_offset: function_name_offset,
-        zend_string_len_offset: zend_string_len_offset,
-        zend_string_val_offset: zend_string_val_offset,
-    }
+fn parse_args() -> ArgMatches<'static> {
+    App::new("php-stacktrace")
+        .version("0.1")
+        .about("Read stacktrace from outside PHP process")
+        .arg(
+            Arg::with_name("DEBUGINFO")
+                .value_name("debuginfo_path")
+                .short("d")
+                .help("Path to php debuginfo")
+                .required(false),
+        )
+        .arg(
+            Arg::with_name("WRITE_CONFIG")
+                .short("w")
+                .value_name("write_config_path")
+                .help("Write config to file, requires -d")
+                .requires("DEBUGINFO")
+                .required(false),
+        )
+        .arg(
+            Arg::with_name("CONFIG")
+                .short("c")
+                .value_name("config_path")
+                .help("Path to config file, conflicts with -d, -w")
+                .conflicts_with_all(&["DEBUGINFO", "WRITE_CONFIG"])
+                .required(false),
+        )
+        .arg(
+            Arg::with_name("PID")
+                .help("PID of the PHP process")
+                .required(true)
+                .index(1),
+        )
+        .get_matches()
 }
 
-#[derive(Debug, Clone)]
-struct DebugInfo {
-    executor_globals_address: usize,
-    zend_executor_globals: CStruct,
-    zend_execute_data: CStruct,
-    zval: CStruct,
-    zend_value: CUnion,
-    zend_function: CUnion,
-    zend_string: CStruct,
-    zend_class_entry: CStruct,
-    current_execute_data_offset: usize,
-    this_value_offset: usize,
-    func_offset: usize,
-    prev_execute_data_offset: usize,
-    function_name_offset: usize,
-    zend_string_len_offset: usize,
-    zend_string_val_offset: usize,
+fn get_debug_info<Pid>(pid: Pid, matches: &ArgMatches)-> DebugInfo
+where Pid: TryIntoProcessHandle + std::fmt::Display + std::str::FromStr + Copy,
+{
+    if matches.is_present("CONFIG") {
+        let config_path: String = matches.value_of("CONFIG").unwrap().parse().unwrap();
+        get_debug_info_from_config(pid, config_path).unwrap()
+    } else {
+        let dwarf_path: String = matches.value_of("DEBUGINFO").unwrap().parse().unwrap();
+        let dwarf = parse_dwarf_file(dwarf_path);
+        let debuginfo = get_debug_info_from_dwarf(pid, dwarf);
+        debuginfo
+    }
 }
 
 fn get_pointer_address(vec: &[u8]) -> usize {
@@ -151,74 +128,11 @@ where
     }
 }
 
-fn get_executor_globals_address<Pid>(pid: Pid) -> usize
-where
-    Pid: TryIntoProcessHandle + std::fmt::Display + Copy,
-{
-    get_maps_address(pid) + get_nm_address(pid)
-}
-
-fn get_nm_address<Pid>(pid: Pid) -> usize
-where
-    Pid: TryIntoProcessHandle + std::fmt::Display,
-{
-    let nm_command = Command::new("nm")
-        .arg("-D")
-        .arg((format!("/proc/{}/exe", pid)))
-        .stdout(Stdio::piped())
-        .stdin(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
-        .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
-    if !nm_command.status.success() {
-        panic!(
-            "failed to execute process: {}",
-            String::from_utf8(nm_command.stderr).unwrap()
-        )
-    }
-
-    let nm_output = String::from_utf8(nm_command.stdout).unwrap();
-    let re = Regex::new(r"(\w+) [B] executor_globals").unwrap();
-    let cap = re.captures(&nm_output).unwrap_or_else(|| {
-        println!("Cannot find executor_globals in php process");
-        process::exit(1)
-    });
-    let address_str = cap.get(1).unwrap().as_str();
-    let addr = usize::from_str_radix(address_str, 16).unwrap();
-    addr
-}
-
-fn get_maps_address<Pid>(pid: Pid) -> usize
-where
-    Pid: TryIntoProcessHandle + std::fmt::Display,
-{
-    let cat_command = Command::new("cat")
-        .arg(format!("/proc/{}/maps", pid))
-        .stdout(Stdio::piped())
-        .stdin(Stdio::null())
-        .stderr(Stdio::piped())
-        .output()
-        .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
-    if !cat_command.status.success() {
-        panic!(
-            "failed to execute process: {}",
-            String::from_utf8(cat_command.stderr).unwrap()
-        )
-    }
-
-    let output = String::from_utf8(cat_command.stdout).unwrap();
-    let re = Regex::new(r"(\w+).+xp.+?bin/php").unwrap();
-    let cap = re.captures(&output).unwrap();
-    let address_str = cap.get(1).unwrap().as_str();
-    let addr = usize::from_str_radix(address_str, 16).unwrap();
-    addr
-}
-
 fn get_current_execute_data_address<T>(source: &T, info: &DebugInfo) -> Option<usize>
 where
     T: CopyAddress,
 {
-    let pointer_addr = info.executor_globals_address + info.current_execute_data_offset;
+    let pointer_addr = info.executor_globals_address + info.eg_current_execute_data_offset;
     let data = copy_address_raw(pointer_addr as *const c_void, 8, source);
     match data {
         Some(d) => Some(get_pointer_address(&d)),
@@ -230,13 +144,13 @@ fn read_execute_data<T>(addr: usize, source: &T, info: &DebugInfo) -> Option<Vec
 where
     T: CopyAddress,
 {
-    let size = info.zend_execute_data.byte_size;
+    let size = info.zend_execute_data_byte_size;
     copy_address_raw(addr as *const c_void, size, source)
 }
 
 fn get_func_address(execute_data: &Vec<u8>, info: &DebugInfo) -> usize {
     let mut rdr = Cursor::new(execute_data);
-    rdr.set_position(u64::try_from(info.func_offset).unwrap());
+    rdr.set_position(u64::try_from(info.ed_func_offset).unwrap());
     usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
 }
 
@@ -244,7 +158,7 @@ fn read_function_name_address<T>(func_address: usize, source: &T, info: &DebugIn
 where
     T: CopyAddress,
 {
-    let addr = func_address + info.function_name_offset;
+    let addr = func_address + info.fu_function_name_offset;
     let mdata = copy_address_raw(addr as *const c_void, 8, source);
     match mdata {
         Some(d) => Some(get_pointer_address(&d)),
@@ -254,7 +168,7 @@ where
 
 fn get_prev_execute_data_address(execute_data: &Vec<u8>, info: &DebugInfo) -> usize {
     let mut rdr = Cursor::new(execute_data);
-    rdr.set_position(u64::try_from(info.prev_execute_data_offset).unwrap());
+    rdr.set_position(u64::try_from(info.ed_prev_execute_data_offset).unwrap());
     usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
 }
 
