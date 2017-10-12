@@ -1,6 +1,6 @@
 [package]
 name = "php-stacktrace"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Oraoto <melegant2@gmail.com>"]
 
 [dependencies]
