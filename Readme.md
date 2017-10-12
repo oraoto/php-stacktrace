@@ -16,7 +16,7 @@ Sampling profiler for PHP programs, inspired by [ruby-stacktrace](https://github
 ./php-stacktrace -d <path to debuginfo> <pid>
 ~~~
 
-## Write config
+## Generate config
 
 ~~~
 ./php-stacktrace -d <path to debuginfo> -w <path to config> <pid>
@@ -49,7 +49,7 @@ The config file contains basic info of PHP struct and unions:
 ## Get stacktrace with config (faster)
 
 ~~~
-./php-stacktrace -c <path to config> -w <path to config> <pid>
+./php-stacktrace -c <path to config> <pid>
 ~~~
 
 For a running Laravel applicaiton, the output looks like:
