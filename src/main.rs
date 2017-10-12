@@ -14,6 +14,7 @@ extern crate regex;
 use std::convert::TryFrom;
 use libc::*;
 use read_process_memory::*;
+use std::io;
 use std::io::Cursor;
 use std::thread;
 use std::time::Duration;
@@ -34,23 +35,25 @@ where
     let debuginfo = get_debug_info(pid, &matches);
 
     if matches.is_present("WRITE_CONFIG") {
-        write_debuginfo_to_conif(&debuginfo, matches.value_of("WRITE_CONFIG").unwrap().parse().unwrap())
+        write_debuginfo_to_conif(
+            &debuginfo,
+            matches.value_of("WRITE_CONFIG").unwrap().parse().unwrap(),
+        )
     }
 
     let source = pid.try_into_process_handle().unwrap();
 
-    println!("{:?}", debuginfo);
-
     loop {
-        let trace = get_stack_trace(&source, &debuginfo);
-        if trace.len() > 0 {
-            for item in &trace {
-                println!("{}", item);
+        match get_stack_trace(&source, &debuginfo) {
+            Err(_) => (),
+            Ok(trace) => if trace.len() > 0 {
+                for item in &trace {
+                    println!("{}", item);
+                }
+                break;
             }
-            break;
-        } else {
-            thread::sleep(Duration::from_millis(10));
         }
+        thread::sleep(Duration::from_millis(10));
     }
 }
 
@@ -90,8 +93,9 @@ fn parse_args() -> ArgMatches<'static> {
         .get_matches()
 }
 
-fn get_debug_info<Pid>(pid: Pid, matches: &ArgMatches)-> DebugInfo
-where Pid: TryIntoProcessHandle + std::fmt::Display + std::str::FromStr + Copy,
+fn get_debug_info<Pid>(pid: Pid, matches: &ArgMatches) -> DebugInfo
+where
+    Pid: TryIntoProcessHandle + std::fmt::Display + std::str::FromStr + Copy,
 {
     if matches.is_present("CONFIG") {
         let config_path: String = matches.value_of("CONFIG").unwrap().parse().unwrap();
@@ -114,37 +118,35 @@ fn get_usize(vec: &[u8]) -> usize {
     usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
 }
 
-fn copy_address_raw<T>(addr: *const c_void, length: usize, source: &T) -> Option<Vec<u8>>
+fn copy_address_raw<T>(addr: *const c_void, length: usize, source: &T) -> io::Result<Vec<u8>>
 where
     T: CopyAddress,
 {
-    if length > 10240 {
-        return None;
+    if length > 512 * 1024 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Can't copy more than 512KB",
+        ));
     }
     let mut copy = vec![0; length];
-    match source.copy_address(addr as usize, &mut copy) {
-        Ok(_) => Some(copy),
-        Err(_) => None,
-    }
+    try!(source.copy_address(addr as usize, &mut copy));
+    Ok(copy)
 }
 
-fn get_current_execute_data_address<T>(source: &T, info: &DebugInfo) -> Option<usize>
+fn get_current_execute_data_address<T>(source: &T, info: &DebugInfo) -> io::Result<usize>
 where
     T: CopyAddress,
 {
     let pointer_addr = info.executor_globals_address + info.eg_current_execute_data_offset;
-    let data = copy_address_raw(pointer_addr as *const c_void, 8, source);
-    match data {
-        Some(d) => Some(get_pointer_address(&d)),
-        None => None,
-    }
+    let data = try!(copy_address_raw(pointer_addr as *const c_void, 8, source));
+    Ok(get_pointer_address(&data))
 }
 
-fn read_execute_data<T>(addr: usize, source: &T, info: &DebugInfo) -> Option<Vec<u8>>
+fn read_execute_data<T>(addr: usize, source: &T, info: &DebugInfo) -> io::Result<Vec<u8>>
 where
     T: CopyAddress,
 {
-    let size = info.zend_execute_data_byte_size;
+    let size = info.ed_byte_size;
     copy_address_raw(addr as *const c_void, size, source)
 }
 
@@ -154,17 +156,26 @@ fn get_func_address(execute_data: &Vec<u8>, info: &DebugInfo) -> usize {
     usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
 }
 
-fn read_function_name_address<T>(func_address: usize, source: &T, info: &DebugInfo) -> Option<usize>
+fn read_function_name_address<T>(
+    func_address: usize,
+    source: &T,
+    info: &DebugInfo,
+) -> io::Result<usize>
 where
     T: CopyAddress,
 {
     let addr = func_address + info.fu_function_name_offset;
-    let mdata = copy_address_raw(addr as *const c_void, 8, source);
-    match mdata {
-        Some(d) => Some(get_pointer_address(&d)),
-        None => None,
-    }
+    let data = try!(copy_address_raw(addr as *const c_void, 8, source));
+    Ok(get_pointer_address(&data))
 }
+
+fn read_vm_stack<T>(source: &T, info: &DebugInfo) -> std::io::Result<(usize, usize, Vec<u8>)>
+where
+    T: CopyAddress,
+{
+    panic!("")
+}
+
 
 fn get_prev_execute_data_address(execute_data: &Vec<u8>, info: &DebugInfo) -> usize {
     let mut rdr = Cursor::new(execute_data);
@@ -172,60 +183,37 @@ fn get_prev_execute_data_address(execute_data: &Vec<u8>, info: &DebugInfo) -> us
     usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
 }
 
-fn read_zend_string<T>(addr: usize, source: &T, info: &DebugInfo) -> Option<String>
+fn read_zend_string<T>(addr: usize, source: &T, info: &DebugInfo) -> io::Result<String>
 where
     T: CopyAddress,
 {
     let len_addr = addr + info.zend_string_len_offset;
     let val_addr = addr + info.zend_string_val_offset;
-    let len_data = copy_address_raw(len_addr as *const c_void, 8, source);
-    if len_data.is_none() {
-        return None;
-    }
-    let len = get_usize(&len_data.unwrap());
-    let data = copy_address_raw(val_addr as *const c_void, len, source);
-    if data.is_none() {
-        return None;
-    }
-    String::from_utf8(data.unwrap()).ok()
+    let len_data = try!(copy_address_raw(len_addr as *const c_void, 8, source));
+    let len = get_usize(&len_data);
+    let data = try!(copy_address_raw(val_addr as *const c_void, len, source));
+    Ok(String::from_utf8(data).unwrap())
 }
 
-fn get_stack_trace<T>(source: &T, info: &DebugInfo) -> Vec<String>
+fn get_stack_trace<T>(source: &T, info: &DebugInfo) -> io::Result<Vec<String>>
 where
     T: CopyAddress,
 {
-    let maddr = get_current_execute_data_address(source, info);
+    let mut addr = try!(get_current_execute_data_address(source, info));
     let mut stack_trace = vec![];
 
-    if maddr.is_none() {
-        return stack_trace;
-    }
-
-    let mut addr = maddr.unwrap();
-
     while addr != 0 {
-        let mexecute_data = read_execute_data(addr, source, info);
-        if mexecute_data.is_none() {
-            return stack_trace;
-        }
-        let execute_data = mexecute_data.unwrap();
+        let execute_data = try!(read_execute_data(addr, source, info));
 
         let func_addr = get_func_address(&execute_data, info);
         let mut trace = String::new();
         if func_addr == 0 {
             trace.push_str("???");
         } else {
-            let mfunction_name_addr = read_function_name_address(func_addr, source, info);
-            if mfunction_name_addr.is_none() {
-                return stack_trace;
-            }
-            let function_name_addr = mfunction_name_addr.unwrap();
-
+            let function_name_addr = try!(read_function_name_address(func_addr, source, info));
             if function_name_addr != 0 {
-                let function_name = read_zend_string(function_name_addr, source, info);
-                if function_name.is_some() {
-                    trace.push_str(function_name.unwrap().as_str());
-                }
+                let function_name = try!(read_zend_string(function_name_addr, source, info));
+                trace.push_str(function_name.as_str());
             } else {
                 trace.push_str("main");
             }
@@ -234,5 +222,5 @@ where
         let prev_execute_data_addr = get_prev_execute_data_address(&execute_data, info);
         addr = prev_execute_data_addr;
     }
-    return stack_trace;
+    Ok(stack_trace)
 }
