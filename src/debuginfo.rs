@@ -19,6 +19,7 @@ pub struct DebugInfo {
     pub executor_globals_address: usize,
 
     // _zend_executor_globals
+    pub eg_byte_size: usize,
     pub eg_current_execute_data_offset: usize,
     pub eg_vm_stack_top_offset: usize,
     pub eg_vm_stack_end_offset: usize,
@@ -32,10 +33,18 @@ pub struct DebugInfo {
 
     // _zend_function
     pub fu_function_name_offset: usize,
+    pub fu_scope_offset: usize,
 
     // _zend_string
     pub zend_string_len_offset: usize,
     pub zend_string_val_offset: usize,
+
+    // _zend_vm_stack
+    pub stack_byte_size: usize,
+    pub stack_end_offset: usize,
+
+    // _zend_class_entry
+    pub ce_name_offset: usize
 }
 
 pub fn get_debug_info_from_config<Pid>(pid: Pid, path: String) -> std::io::Result<DebugInfo>
@@ -86,13 +95,19 @@ where
     let member_common = zend_function.find_member("common").unwrap();
     let common = dwarf.find_struct_by_id(member_common.type_id).unwrap();
     let function_name_offset = common.find_member("function_name").unwrap().byte_offset;
+    let scope_offset = common.find_member("scope").unwrap().byte_offset;
 
     let zend_string = dwarf.find_struct("_zend_string").unwrap();
     let zend_string_len_offset = zend_string.find_member("len").unwrap().byte_offset;
     let zend_string_val_offset = zend_string.find_member("val").unwrap().byte_offset;
 
+    let zend_vm_stack = dwarf.find_struct("_zend_vm_stack").unwrap();
+
+    let zend_class_entry = dwarf.find_struct("_zend_class_entry").unwrap();
+
     DebugInfo {
         executor_globals_address: get_executor_globals_address(pid),
+        eg_byte_size: zend_executor_globals.byte_size,
         ed_byte_size: zend_execute_data.byte_size,
         eg_current_execute_data_offset: current_execute_data_offset,
         ed_func_offset: func_offset,
@@ -113,6 +128,10 @@ where
             .byte_offset,
         zend_string_len_offset: zend_string_len_offset,
         zend_string_val_offset: zend_string_val_offset,
+        stack_byte_size: zend_vm_stack.byte_size,
+        stack_end_offset: zend_vm_stack.find_member("end").unwrap().byte_offset,
+        fu_scope_offset: scope_offset,
+        ce_name_offset: zend_class_entry.find_member("name").unwrap().byte_offset
     }
 }
 
