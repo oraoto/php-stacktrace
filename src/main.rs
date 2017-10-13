@@ -34,10 +34,7 @@ where
     let debuginfo = get_debug_info(pid, &matches);
 
     if matches.is_present("WRITE_CONFIG") {
-        write_debuginfo_to_conif(
-            &debuginfo,
-            matches.value_of("WRITE_CONFIG").unwrap().parse().unwrap(),
-        )
+        write_debuginfo_to_conif(&debuginfo, matches.value_of("WRITE_CONFIG").unwrap())
     }
 
     let source = pid.try_into_process_handle().unwrap();
@@ -50,7 +47,7 @@ where
         }
         match get_stack_trace(&source, &debuginfo, &vm_stack.unwrap()) {
             Err(_) => (),
-            Ok(trace) => if trace.len() > 0 {
+            Ok(trace) => if !trace.is_empty() {
                 for item in trace {
                     if item.scope.is_some() {
                         println!("{}->{}()", item.scope.unwrap(), item.name);
@@ -107,12 +104,11 @@ where
 {
     if matches.is_present("CONFIG") {
         let config_path: String = matches.value_of("CONFIG").unwrap().parse().unwrap();
-        get_debug_info_from_config(pid, config_path).unwrap()
+        get_debug_info_from_config(pid, &config_path).unwrap()
     } else {
         let dwarf_path: String = matches.value_of("DEBUGINFO").unwrap().parse().unwrap();
         let dwarf = parse_dwarf_file(dwarf_path);
-        let debuginfo = get_debug_info_from_dwarf(pid, dwarf);
-        debuginfo
+        get_debug_info_from_dwarf(pid, &dwarf)
     }
 }
 
@@ -255,10 +251,9 @@ where
         let func_addr = u64_to_usize(rdr.read_u64::<NativeEndian>().unwrap());
         function.name = try!(get_function_name(func_addr, source, info));
 
-        match get_function_scope(func_addr, ed_offset, source, info, stack) {
-            Ok(s) => function.scope = Some(s),
-            Err(_) => (),
-        };
+        if let Ok(s) = get_function_scope(func_addr, ed_offset, source, info, stack) {
+            function.scope = Some(s);
+        }
 
         trace.push(function);
 
@@ -308,13 +303,13 @@ where
     if is_obj {
         let scope_addr = try!(get_function_scope_address(func_addr, source, info));
         if scope_addr != 0 {
-            return get_class_entry_name(scope_addr, source, info);
+            get_class_entry_name(scope_addr, source, info)
         } else {
-            return Err(io::Error::new(io::ErrorKind::Other, "Not implemented"));
+            Err(io::Error::new(io::ErrorKind::Other, "Not implemented"))
         }
     } else {
         let scope_addr = try!(get_function_scope_address(func_addr, source, info));
-        return get_class_entry_name(scope_addr, source, info);
+        get_class_entry_name(scope_addr, source, info)
     }
 }
 
@@ -328,9 +323,12 @@ where
             8,
             source
         )));
-        return read_zend_string(addr, source, info);
+        read_zend_string(addr, source, info)
     } else {
-        return Err(io::Error::new(io::ErrorKind::Other, "Failed to read class entry name"));
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Failed to read class entry name",
+        ))
     }
 }
 

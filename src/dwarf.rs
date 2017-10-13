@@ -187,14 +187,14 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                         }
                     }
                     if prev_entry_offset.is_some() {
-                        let kind = kind_lookup.get(&prev_entry_offset.unwrap()).unwrap();
-                        match kind {
-                            &EntryKind::Struct => {
+                        let kind = &kind_lookup[&prev_entry_offset.unwrap()];
+                        match *kind {
+                            EntryKind::Struct => {
                                 let cstruct =
                                     struct_lookup.get_mut(&prev_entry_offset.unwrap()).unwrap();
                                 cstruct.members.insert(cmember.name.clone(), cmember);
                             }
-                            &EntryKind::Union => {
+                            EntryKind::Union => {
                                 let cunion =
                                     union_lookup.get_mut(&prev_entry_offset.unwrap()).unwrap();
                                 cunion.members.insert(cmember.name.clone(), cmember);
@@ -243,9 +243,8 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                     let mut carray = CArray::new();
                     let mut attrs = entry.attrs();
                     while let Ok(Some(attr)) = attrs.next() {
-                        match attr.name() {
-                            gimli::DW_AT_type => carray.type_id = parse_attr_at_type(attr, unit),
-                            _ => (),
+                        if gimli::DW_AT_type == attr.name() {
+                            carray.type_id = parse_attr_at_type(attr, unit);
                         }
                     }
                     prev_entry_offset = Some(entry_offset);
@@ -257,9 +256,8 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                     let mut attrs = entry.attrs();
                     let mut upper_bound = 0;
                     while let Ok(Some(attr)) = attrs.next() {
-                        match attr.name() {
-                            gimli::DW_AT_upper_bound => upper_bound = parse_attr_usize(attr),
-                            _ => (),
+                        if gimli::DW_AT_upper_bound == attr.name() {
+                            upper_bound = parse_attr_usize(attr);
                         }
                     }
                     if prev_entry_offset.is_some() {
@@ -313,9 +311,8 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                     let mut cconst = CConst::new();
                     let mut attrs = entry.attrs();
                     while let Ok(Some(attr)) = attrs.next() {
-                        match attr.name() {
-                            gimli::DW_AT_type => cconst.type_id = parse_attr_at_type(attr, unit),
-                            _ => (),
+                        if gimli::DW_AT_type == attr.name() {
+                            cconst.type_id = parse_attr_at_type(attr, unit);
                         }
                     }
                     const_lookup.insert(entry_offset, cconst);
@@ -337,8 +334,8 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
     let struct_lookup_clone = struct_lookup.clone();
     let union_lookup_clone = union_lookup.clone();
 
-    for (id, cstruct) in struct_lookup.iter_mut() {
-        for (_, member) in cstruct.members.iter_mut() {
+    for (id, cstruct) in &mut struct_lookup {
+        for member in cstruct.members.values_mut() {
             let mut size = member.byte_size;
             if size == 0 {
                 size = get_type_size(
@@ -359,8 +356,8 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
         struct_name_lookup.insert(cstruct.name.clone(), *id);
     }
 
-    for (id, cunion) in union_lookup.iter_mut() {
-        for (_, member) in cunion.members.iter_mut() {
+    for (id, cunion) in &mut union_lookup {
+        for member in cunion.members.values_mut() {
             let mut size = member.byte_size;
             if size == 0 {
                 size = get_type_size(
@@ -406,7 +403,7 @@ fn get_type_size(
     let mut count = 1;
 
     loop {
-        tries = tries + 1;
+        tries += 1;
         if tries > 10 {
             return 0;
         }
@@ -415,15 +412,15 @@ fn get_type_size(
         if skind.is_none() {
             return 0;
         }
-        match skind.unwrap() {
-            &EntryKind::BaseType => return count * basetype_lookup.get(&id).unwrap().byte_size,
-            &EntryKind::Enum => return count * enum_lookup.get(&id).unwrap().byte_size,
-            &EntryKind::Pointer => return count * pointer_lookup.get(&id).unwrap().byte_size,
-            &EntryKind::Struct => return count * struct_lookup.get(&id).unwrap().byte_size,
-            &EntryKind::Union => return count * union_lookup.get(&id).unwrap().byte_size,
-            &EntryKind::TypeDef => id = typedef_lookup.get(&id).unwrap().type_id,
-            &EntryKind::Const => id = const_lookup.get(&id).unwrap().type_id,
-            &EntryKind::Array => {
+        match *skind.unwrap() {
+            EntryKind::BaseType => return count * basetype_lookup.get(&id).unwrap().byte_size,
+            EntryKind::Enum => return count * enum_lookup.get(&id).unwrap().byte_size,
+            EntryKind::Pointer => return count * pointer_lookup.get(&id).unwrap().byte_size,
+            EntryKind::Struct => return count * struct_lookup.get(&id).unwrap().byte_size,
+            EntryKind::Union => return count * union_lookup.get(&id).unwrap().byte_size,
+            EntryKind::TypeDef => id = typedef_lookup.get(&id).unwrap().type_id,
+            EntryKind::Const => id = const_lookup.get(&id).unwrap().type_id,
+            EntryKind::Array => {
                 let arr = array_lookup.get(&id).unwrap();
                 count = arr.count;
                 id = arr.type_id;
@@ -446,7 +443,7 @@ where
     }
 }
 
-fn parse_attr_usize<'input, Endian>(attr: gimli::Attribute<EndianBuf<'input, Endian>>) -> usize
+fn parse_attr_usize<Endian>(attr: gimli::Attribute<EndianBuf<Endian>>) -> usize
 where
     Endian: gimli::Endianity,
 {

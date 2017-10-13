@@ -44,14 +44,14 @@ pub struct DebugInfo {
     pub stack_end_offset: usize,
 
     // _zend_class_entry
-    pub ce_name_offset: usize
+    pub ce_name_offset: usize,
 }
 
-pub fn get_debug_info_from_config<Pid>(pid: Pid, path: String) -> std::io::Result<DebugInfo>
+pub fn get_debug_info_from_config<Pid>(pid: Pid, path: &str) -> std::io::Result<DebugInfo>
 where
     Pid: TryIntoProcessHandle + std::fmt::Display + Copy,
 {
-    let path = Path::new(&path);
+    let path = Path::new(path);
     let mut s = String::new();
     let mut file = try!(File::open(&path));
     try!(file.read_to_string(&mut s));
@@ -60,9 +60,9 @@ where
     Ok(info)
 }
 
-pub fn write_debuginfo_to_conif(debuginfo: &DebugInfo, path: String) {
+pub fn write_debuginfo_to_conif(debuginfo: &DebugInfo, path: &str) {
     let json = serde_json::to_string_pretty(debuginfo).unwrap();
-    let path = Path::new(&path);
+    let path = Path::new(path);
     let display = path.display();
     let mut file = match File::create(&path) {
         Err(why) => panic!("Couldn't create {}: {}", display, why.description()),
@@ -74,7 +74,7 @@ pub fn write_debuginfo_to_conif(debuginfo: &DebugInfo, path: String) {
     }
 }
 
-pub fn get_debug_info_from_dwarf<Pid>(pid: Pid, dwarf: DwarfLookup) -> DebugInfo
+pub fn get_debug_info_from_dwarf<Pid>(pid: Pid, dwarf: &DwarfLookup) -> DebugInfo
 where
     Pid: TryIntoProcessHandle + std::fmt::Display + Copy,
 {
@@ -131,7 +131,7 @@ where
         stack_byte_size: zend_vm_stack.byte_size,
         stack_end_offset: zend_vm_stack.find_member("end").unwrap().byte_offset,
         fu_scope_offset: scope_offset,
-        ce_name_offset: zend_class_entry.find_member("name").unwrap().byte_offset
+        ce_name_offset: zend_class_entry.find_member("name").unwrap().byte_offset,
     }
 }
 
@@ -148,7 +148,7 @@ where
 {
     let nm_command = Command::new("nm")
         .arg("-D")
-        .arg((format!("/proc/{}/exe", pid)))
+        .arg(format!("/proc/{}/exe", pid))
         .stdout(Stdio::piped())
         .stdin(Stdio::null())
         .stderr(Stdio::piped())
@@ -168,8 +168,7 @@ where
         process::exit(1)
     });
     let address_str = cap.get(1).unwrap().as_str();
-    let addr = usize::from_str_radix(address_str, 16).unwrap();
-    addr
+    usize::from_str_radix(address_str, 16).unwrap()
 }
 
 fn get_maps_address<Pid>(pid: Pid) -> usize
@@ -194,6 +193,5 @@ where
     let re = Regex::new(r"(\w+).+xp.+?bin/php").unwrap();
     let cap = re.captures(&output).unwrap();
     let address_str = cap.get(1).unwrap().as_str();
-    let addr = usize::from_str_radix(address_str, 16).unwrap();
-    addr
+    usize::from_str_radix(address_str, 16).unwrap()
 }
