@@ -4,8 +4,9 @@ extern crate gimli;
 use self::gimli::*;
 use std::collections::HashMap;
 use std::convert::*;
+use std::default::Default;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DwarfLookup {
     struct_lookup: HashMap<usize, CStruct>,
     union_lookup: HashMap<usize, CUnion>,
@@ -24,43 +25,43 @@ enum EntryKind {
     Const,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct CEnum {
     name: String,
     byte_size: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct CArray {
     type_id: usize,
     count: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CUnion {
     name: String,
     pub byte_size: usize,
     members: HashMap<String, CMember>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct CPointer {
     byte_size: usize,
     type_id: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct CConst {
     type_id: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct CBaseType {
     name: String,
     byte_size: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CMember {
     name: String,
     pub byte_size: usize,
@@ -68,14 +69,14 @@ pub struct CMember {
     pub type_id: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CStruct {
     name: String,
     pub byte_size: usize,
     members: HashMap<String, CMember>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CTypeDef {
     name: String,
     type_id: usize,
@@ -130,7 +131,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
 
             match tag {
                 gimli::DW_TAG_typedef => {
-                    let mut typedef = CTypeDef::new();
+                    let mut typedef: CTypeDef = Default::default();
                     let mut attrs = entry.attrs();
                     while let Ok(Some(attr)) = attrs.next() {
                         match attr.name() {
@@ -144,7 +145,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 }
 
                 gimli::DW_TAG_structure_type => {
-                    let mut cstruct = CStruct::new();
+                    let mut cstruct: CStruct = Default::default();
                     let mut attrs = entry.attrs();
                     let mut declaration = false;
                     while let Ok(Some(attr)) = attrs.next() {
@@ -170,7 +171,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 }
 
                 gimli::DW_TAG_member => {
-                    let mut cmember = CMember::new();
+                    let mut cmember: CMember = Default::default();
                     let mut attrs = entry.attrs();
                     while let Ok(Some(attr)) = attrs.next() {
                         match attr.name() {
@@ -205,7 +206,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 }
 
                 gimli::DW_TAG_base_type => {
-                    let mut cbasetype = CBaseType::new();
+                    let mut cbasetype: CBaseType = Default::default();
                     let mut attrs = entry.attrs();
                     while let Ok(Some(attr)) = attrs.next() {
                         match attr.name() {
@@ -225,7 +226,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 }
 
                 gimli::DW_TAG_pointer_type => {
-                    let mut cpointer = CPointer::new();
+                    let mut cpointer: CPointer = Default::default();
                     let mut attrs = entry.attrs();
                     while let Ok(Some(attr)) = attrs.next() {
                         match attr.name() {
@@ -240,7 +241,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 }
 
                 gimli::DW_TAG_array_type => {
-                    let mut carray = CArray::new();
+                    let mut carray: CArray = Default::default();
                     let mut attrs = entry.attrs();
                     while let Ok(Some(attr)) = attrs.next() {
                         if gimli::DW_AT_type == attr.name() {
@@ -268,7 +269,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 }
 
                 gimli::DW_TAG_union_type => {
-                    let mut cunion = CUnion::new();
+                    let mut cunion: CUnion = Default::default();
                     let mut attrs = entry.attrs();
                     let mut declaration = false;
                     while let Ok(Some(attr)) = attrs.next() {
@@ -294,7 +295,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 }
 
                 gimli::DW_TAG_enumeration_type => {
-                    let mut cenum = CEnum::new();
+                    let mut cenum: CEnum = Default::default();
                     let mut attrs = entry.attrs();
                     while let Ok(Some(attr)) = attrs.next() {
                         match attr.name() {
@@ -308,7 +309,7 @@ fn parse_dwarf(debug_info: &[u8], debug_abbrev: &[u8], debug_str: &[u8]) -> Dwar
                 }
 
                 gimli::DW_TAG_const_type => {
-                    let mut cconst = CConst::new();
+                    let mut cconst: CConst = Default::default();
                     let mut attrs = entry.attrs();
                     while let Ok(Some(attr)) = attrs.next() {
                         if gimli::DW_AT_type == attr.name() {
@@ -494,90 +495,14 @@ impl DwarfLookup {
     }
 }
 
-impl CPointer {
-    pub fn new() -> CPointer {
-        CPointer {
-            byte_size: 0,
-            type_id: 0,
-        }
-    }
-}
-
-impl CTypeDef {
-    pub fn new() -> CTypeDef {
-        CTypeDef {
-            name: String::new(),
-            type_id: 0,
-        }
-    }
-}
-
 impl CStruct {
-    pub fn new() -> CStruct {
-        CStruct {
-            name: String::new(),
-            byte_size: 0,
-            members: HashMap::new(),
-        }
-    }
     pub fn find_member(&self, name: &str) -> Option<&CMember> {
         self.members.get(&String::from(name))
     }
 }
 
 impl CUnion {
-    pub fn new() -> CUnion {
-        CUnion {
-            name: String::new(),
-            byte_size: 0,
-            members: HashMap::new(),
-        }
-    }
     pub fn find_member(&self, name: &str) -> Option<&CMember> {
         self.members.get(&String::from(name))
-    }
-}
-
-impl CMember {
-    pub fn new() -> CMember {
-        CMember {
-            name: String::new(),
-            byte_size: 0,
-            byte_offset: 0,
-            type_id: 0,
-        }
-    }
-}
-
-impl CBaseType {
-    pub fn new() -> CBaseType {
-        CBaseType {
-            name: String::new(),
-            byte_size: 0,
-        }
-    }
-}
-
-impl CEnum {
-    pub fn new() -> CEnum {
-        CEnum {
-            name: String::new(),
-            byte_size: 0,
-        }
-    }
-}
-
-impl CArray {
-    pub fn new() -> CArray {
-        CArray {
-            type_id: 0,
-            count: 0,
-        }
-    }
-}
-
-impl CConst {
-    pub fn new() -> CConst {
-        CConst { type_id: 0 }
     }
 }
