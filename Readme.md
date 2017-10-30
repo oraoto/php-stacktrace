@@ -8,6 +8,22 @@ Read stacktrace from outside PHP process, inspired by [ruby-stacktrace](https://
 1. Install debuginfo for php, `sudo dnf debuginfo-install php-debuginfo`
 1. Find debuginfo path, eg, `/usr/lib/debug/.dwz/php71u-7.1.9-2.ius.centos7.x86_64`
 
+# Build from source
+
+You need a nightly version of Rust to compile. With `rustup`, you can:
+
+```
+rustup default nightly && rustup update
+```
+
+To clone and build this project:
+
+```
+git clone https://github.com/oraoto/php-stacktrace.git
+cd php-stacktrace
+cargo build
+```
+
 # Usage
 
 ## Get stacktrace with DWARF debuginfo
