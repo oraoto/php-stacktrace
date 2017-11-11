@@ -26,6 +26,28 @@ cargo build
 
 # Usage
 
+```
+$ ./php-stacktrace --help
+php-stacktrace 0.1.2
+Read stacktrace from outside PHP process
+
+USAGE:
+    php-stacktrace [FLAGS] [OPTIONS] <PID>
+
+FLAGS:
+    -a               Attch to process
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -c <config_path>              Path to config file, conflicts with -d, -w
+    -d <debuginfo_path>           Path to php debuginfo
+    -w <write_config_path>        Write config to file, requires -d
+
+ARGS:
+    <PID>    PID of the PHP process
+```
+
 ## Get stacktrace with DWARF debuginfo
 
 ~~~
@@ -68,52 +90,26 @@ The config file contains basic info of PHP struct and unions:
 ./php-stacktrace -c <path to config> <pid>
 ~~~
 
-For a running Laravel applicaiton, the output looks like:
+For a running Laravel queue worker, the output looks like:
 
 ~~~
 sleep()
-Illuminate\Routing\Router->{closure}()
-Illuminate\Routing\Route->runCallable()
-Illuminate\Routing\Route->run()
-Illuminate\Routing\Router->Illuminate\Routing\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Routing\Middleware\SubstituteBindings->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Foundation\Http\Middleware\VerifyCsrfToken->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\View\Middleware\ShareErrorsFromSession->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Session\Middleware\StartSession->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Cookie\Middleware\EncryptCookies->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Pipeline\Pipeline->then()
-Illuminate\Routing\Router->runRouteWithinStack()
-Illuminate\Routing\Router->dispatchToRoute()
-Illuminate\Routing\Router->dispatch()
-Illuminate\Foundation\Http\Kernel->Illuminate\Foundation\Http\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Foundation\Http\Middleware\TransformsRequest->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Foundation\Http\Middleware\TransformsRequest->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Foundation\Http\Middleware\ValidatePostSize->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Foundation\Http\Middleware\CheckForMaintenanceMode->handle()
-Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}()
-Illuminate\Routing\Pipeline->Illuminate\Routing\{closure}()
-Illuminate\Pipeline\Pipeline->then()
-Illuminate\Foundation\Http\Kernel->sendRequestThroughRouter()
-Illuminate\Foundation\Http\Kernel->handle()
+Illuminate\Queue\Worker->sleep()
+Illuminate\Queue\Worker->daemon()
+Illuminate\Queue\Console\WorkCommand->runWorker()
+Illuminate\Queue\Console\WorkCommand->handle()
+call_user_func_array()
+Illuminate\Container\BoundMethod->Illuminate\Container\{closure}()
+Illuminate\Container\BoundMethod->callBoundMethod()
+Illuminate\Container\BoundMethod->call()
+Illuminate\Container\Container->call()
+Illuminate\Console\Command->execute()
+Symfony\Component\Console\Command\Command->run()
+Illuminate\Console\Command->run()
+Symfony\Component\Console\Application->doRunCommand()
+Symfony\Component\Console\Application->doRun()
+Symfony\Component\Console\Application->run()
+Illuminate\Console\Application->run()
+Illuminate\Foundation\Console\Kernel->handle()
+main()
 ~~~

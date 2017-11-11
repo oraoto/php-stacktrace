@@ -4,6 +4,7 @@ extern crate serde_derive;
 
 mod debuginfo;
 mod dwarf;
+mod attach;
 
 extern crate byteorder;
 extern crate clap;
@@ -22,7 +23,6 @@ use clap::{App, Arg, ArgMatches};
 use debuginfo::*;
 use dwarf::*;
 
-
 fn main()
 where
     Pid: TryIntoProcessHandle + std::fmt::Display + std::str::FromStr + Copy,
@@ -37,34 +37,53 @@ where
         write_debuginfo_to_conif(&debuginfo, matches.value_of("WRITE_CONFIG").unwrap())
     }
 
+    let attach = matches.is_present("ATTCH");
+
     let source = pid.try_into_process_handle().unwrap();
 
     loop {
+        if attach {
+            attach::attach(pid);
+        }
         let vm_stack = get_vm_stack(&source, &debuginfo);
         if vm_stack.is_err() {
             thread::sleep(Duration::from_millis(10));
             continue;
         }
-        match get_stack_trace(&source, &debuginfo, &vm_stack.unwrap()) {
-            Err(_) => (),
-            Ok(trace) => if !trace.is_empty() {
-                for item in trace {
-                    if item.scope.is_some() {
-                        println!("{}->{}()", item.scope.unwrap(), item.name);
-                    } else {
-                        println!("{}()", item.name);
-                    }
+
+        let succ = match get_stack_trace(&source, &debuginfo, &vm_stack.unwrap()) {
+            Err(_) => false,
+            Ok(trace) =>
+                if !trace.is_empty() {
+                    print_trace(trace);
+                    true
+                } else {
+                    false
                 }
-                break;
-            },
+        };
+        if attach {
+            attach::detach(pid);
+        }
+        if succ {
+            break;
         }
         thread::sleep(Duration::from_millis(10));
     }
 }
 
+fn print_trace(trace: Vec<FunctionInfo>) {
+    for item in trace {
+        if item.scope.is_some() {
+            println!("{}->{}()", item.scope.unwrap(), item.name);
+        } else {
+            println!("{}()", item.name);
+        }
+    }
+}
+
 fn parse_args() -> ArgMatches<'static> {
     App::new("php-stacktrace")
-        .version("0.1")
+        .version("0.1.2")
         .about("Read stacktrace from outside PHP process")
         .arg(
             Arg::with_name("DEBUGINFO")
@@ -87,6 +106,12 @@ fn parse_args() -> ArgMatches<'static> {
                 .value_name("config_path")
                 .help("Path to config file, conflicts with -d, -w")
                 .conflicts_with_all(&["DEBUGINFO", "WRITE_CONFIG"])
+                .required(false),
+        )
+        .arg(
+            Arg::with_name("ATTCH")
+                .short("a")
+                .help("Attch to process")
                 .required(false),
         )
         .arg(
