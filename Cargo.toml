@@ -2,6 +2,11 @@
 name = "php-stacktrace"
 version = "0.1.2"
 authors = ["Oraoto <melegant2@gmail.com>"]
+repository = "https://github.com/oraoto/php-stacktrace"
+keywords = ["php", "debug", "stacktrace"]
+readme = "Readme.md"
+license = "MIT"
+description = "Read stacktrace from outside PHP process"
 
 [dependencies]
 elf = "0.0.10"
