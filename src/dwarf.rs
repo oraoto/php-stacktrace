@@ -449,7 +449,7 @@ where
     Endian: gimli::Endianity,
 {
     match attr.udata_value() {
-        Some(u) => usize::try_from(u).expect("u8"),
+        Some(u) => u as usize,
         None => panic!("udata"),
     }
 }

@@ -1,4 +1,3 @@
-#![feature(try_from)]
 #[macro_use]
 extern crate serde_derive;
 
@@ -12,7 +11,6 @@ extern crate libc;
 extern crate read_process_memory;
 extern crate regex;
 
-use std::convert::TryFrom;
 use read_process_memory::*;
 use std::io;
 use std::io::Cursor;
@@ -24,8 +22,6 @@ use debuginfo::*;
 use dwarf::*;
 
 fn main()
-where
-    Pid: TryIntoProcessHandle + std::fmt::Display + std::str::FromStr + Copy,
 {
     let matches = parse_args();
 
@@ -139,12 +135,12 @@ where
 
 fn read_pointer_address(vec: &[u8]) -> usize {
     let mut rdr = Cursor::new(vec);
-    usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
+    rdr.read_u64::<NativeEndian>().unwrap() as usize
 }
 
 fn get_usize(vec: &[u8]) -> usize {
     let mut rdr = Cursor::new(vec);
-    usize::try_from(rdr.read_u64::<NativeEndian>().unwrap()).unwrap()
+    rdr.read_u64::<NativeEndian>().unwrap() as usize
 }
 
 fn copy_address_checked<T>(addr: usize, length: usize, source: &T) -> io::Result<Vec<u8>>
@@ -370,8 +366,8 @@ where
 }
 
 fn u64_to_usize(u: u64) -> usize {
-    usize::try_from(u).unwrap()
+    u as usize
 }
 fn usize_to_u64(u: usize) -> u64 {
-    u64::try_from(u).unwrap()
+    u as u64
 }

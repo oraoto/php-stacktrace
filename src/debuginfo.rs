@@ -190,7 +190,7 @@ where
     }
 
     let output = String::from_utf8(cat_command.stdout).unwrap();
-    let re = Regex::new(r"(\w+).+xp.+?bin/php").unwrap();
+    let re = Regex::new(r"(\w+).+xp.+?php").unwrap();
     let cap = re.captures(&output).unwrap();
     let address_str = cap.get(1).unwrap().as_str();
     usize::from_str_radix(address_str, 16).unwrap()
