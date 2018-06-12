@@ -1,4 +1,6 @@
 # php-stacktrace
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Foraoto%2Fphp-stacktrace.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Foraoto%2Fphp-stacktrace?ref=badge_shield)
+
 
 Read stacktrace from outside PHP process, inspired by [ruby-stacktrace](https://github.com/jvns/ruby-stacktrace).
 
@@ -113,3 +115,7 @@ Illuminate\Console\Application->run()
 Illuminate\Foundation\Console\Kernel->handle()
 main()
 ~~~
+
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Foraoto%2Fphp-stacktrace.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Foraoto%2Fphp-stacktrace?ref=badge_large)
