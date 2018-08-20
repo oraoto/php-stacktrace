@@ -4,6 +4,7 @@ extern crate serde_json;
 use std;
 use std::error::Error;
 use std::io::prelude::*;
+use std::fs;
 use std::fs::File;
 use std::path::Path;
 use std::process;
@@ -189,8 +190,12 @@ where
         )
     }
 
+    let exe_path = fs::read_link(format!("/proc/{}/exe", pid)).unwrap();
+    let exe_path = exe_path.to_string_lossy();
+    let regex = String::from(r"(\w+).+p.+?") + &exe_path;
+
     let output = String::from_utf8(cat_command.stdout).unwrap();
-    let re = Regex::new(r"(\w+).+xp.+?php").unwrap();
+    let re = Regex::new(&regex).unwrap();
     let cap = re.captures(&output).unwrap();
     let address_str = cap.get(1).unwrap().as_str();
     usize::from_str_radix(address_str, 16).unwrap()
