@@ -5,8 +5,7 @@ Read stacktrace from outside PHP process, inspired by [ruby-stacktrace](https://
 # Install
 
 1. [Download](https://github.com/oraoto/php-stacktrace/releases) or build `php-stacktrace`
-1. Install debuginfo for php, `sudo dnf debuginfo-install php-debuginfo`
-1. Find debuginfo path, eg, `/usr/lib/debug/.dwz/php71u-7.1.9-2.ius.centos7.x86_64`
+1. Optional: Install debuginfo for php, `sudo dnf debuginfo-install php-debuginfo`. Find debuginfo path, eg, `/usr/lib/debug/.dwz/php71u-7.1.9-2.ius.centos7.x86_64`
 
 # Build from source
 
@@ -48,7 +47,41 @@ ARGS:
     <PID>    PID of the PHP process
 ```
 
+## Get stacktrace with config (faster)
+
+~~~
+./php-stacktrace -c <path to config> <pid>
+~~~
+
+For a running Laravel queue worker, the output looks like:
+
+~~~
+sleep()
+Illuminate\Queue\Worker->sleep()
+Illuminate\Queue\Worker->daemon()
+Illuminate\Queue\Console\WorkCommand->runWorker()
+Illuminate\Queue\Console\WorkCommand->handle()
+call_user_func_array()
+Illuminate\Container\BoundMethod->Illuminate\Container\{closure}()
+Illuminate\Container\BoundMethod->callBoundMethod()
+Illuminate\Container\BoundMethod->call()
+Illuminate\Container\Container->call()
+Illuminate\Console\Command->execute()
+Symfony\Component\Console\Command\Command->run()
+Illuminate\Console\Command->run()
+Symfony\Component\Console\Application->doRunCommand()
+Symfony\Component\Console\Application->doRun()
+Symfony\Component\Console\Application->run()
+Illuminate\Console\Application->run()
+Illuminate\Foundation\Console\Kernel->handle()
+main()
+~~~
+
+Two default configs for PHP 7.1-7.3 are provided: [configs](./configs)
+
 ## Get stacktrace with DWARF debuginfo
+
+In case the provided configs doesn't work with your PHP, you can use DWARF debuginfo to get the stacktrace and generate your config.
 
 ~~~
 ./php-stacktrace -d <path to debuginfo> <pid>
@@ -81,35 +114,4 @@ The config file contains basic info of PHP struct and unions:
   "stack_end_offset": 8,
   "ce_name_offset": 8
 }
-~~~
-
-
-## Get stacktrace with config (faster)
-
-~~~
-./php-stacktrace -c <path to config> <pid>
-~~~
-
-For a running Laravel queue worker, the output looks like:
-
-~~~
-sleep()
-Illuminate\Queue\Worker->sleep()
-Illuminate\Queue\Worker->daemon()
-Illuminate\Queue\Console\WorkCommand->runWorker()
-Illuminate\Queue\Console\WorkCommand->handle()
-call_user_func_array()
-Illuminate\Container\BoundMethod->Illuminate\Container\{closure}()
-Illuminate\Container\BoundMethod->callBoundMethod()
-Illuminate\Container\BoundMethod->call()
-Illuminate\Container\Container->call()
-Illuminate\Console\Command->execute()
-Symfony\Component\Console\Command\Command->run()
-Illuminate\Console\Command->run()
-Symfony\Component\Console\Application->doRunCommand()
-Symfony\Component\Console\Application->doRun()
-Symfony\Component\Console\Application->run()
-Illuminate\Console\Application->run()
-Illuminate\Foundation\Console\Kernel->handle()
-main()
 ~~~
