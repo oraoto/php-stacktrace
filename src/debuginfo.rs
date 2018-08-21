@@ -136,7 +136,7 @@ where
     }
 }
 
-fn get_executor_globals_address<Pid>(pid: Pid) -> usize
+pub fn get_executor_globals_address<Pid>(pid: Pid) -> usize
 where
     Pid: TryIntoProcessHandle + std::fmt::Display + Copy,
 {
