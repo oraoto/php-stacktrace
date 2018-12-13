@@ -1,7 +1,7 @@
 [package]
 name = "php-stacktrace"
 version = "0.1.2"
-authors = ["Oraoto <melegant2@gmail.com>"]
+authors = ["Oraoto <oraoto@outlook.com>"]
 repository = "https://github.com/oraoto/php-stacktrace"
 keywords = ["php", "debug", "stacktrace"]
 readme = "Readme.md"
@@ -10,12 +10,12 @@ description = "Read stacktrace from outside PHP process"
 
 [dependencies]
 elf = "0.0.10"
-regex = "0.2.2"
-gimli = "0.14.0"
+regex = "1.1.0"
+gimli = "0.16.1"
 byteorder = "1.1.0"
-read-process-memory = "0.1.1"
-libc = "0.2.32"
-clap = "2.26.2"
-serde = "1.0.15"
-serde_derive = "1.0.15"
-serde_json = "1.0.3"
+read-process-memory = "0.1.2"
+libc = "0.2.45"
+clap = "2.32.0"
+serde = "1.0.81"
+serde_derive = "1.0.81"
+serde_json = "1.0.33"

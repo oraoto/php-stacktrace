@@ -1,97 +1,245 @@
+
 extern crate read_process_memory;
 
 use php73;
 use php72;
+use php56;
 
 use read_process_memory::*;
 use std::mem::*;
 
-// To stupid
-pub trait ProcessReader<EG, ED, F, S> {
-    fn get_executor_global<T>(&self, source: &T, addr: usize) -> EG where T:CopyAddress;
-    fn get_execute_data<T>(&self, source: &T, addr: usize) -> ED where T:CopyAddress;
-    fn get_function<T>(&self, source: &T, addr: usize) -> F where T:CopyAddress;
-    fn get_string<T>(&self, source: &T, addr: usize) -> String where T:CopyAddress;
+pub trait ProcessReader {
+    fn read(&self, addr: usize) -> Trace;
 }
 
-pub struct PHP730 { }
-pub struct PHP720 { }
+pub struct Trace {
 
-impl ProcessReader<
-    php73::zend_executor_globals,
-    php73::zend_execute_data,
-    php73::zend_function,
-    php73::zend_string> for PHP730 {
-    fn get_executor_global<T>(&self, source: &T, addr: usize) -> php73::zend_executor_globals
-    where T: CopyAddress
+}
+
+pub struct PHP730 { pub source: ProcessHandle }
+pub struct PHP720 { pub source: ProcessHandle }
+pub struct PHP560 { pub source: ProcessHandle }
+
+impl PHP730 {
+
+    fn get_executor_global(&self, addr: usize) -> php73::zend_executor_globals
     {
-        read_memory::<T, php73::zend_executor_globals>(source, addr)
+        read_memory::<php73::zend_executor_globals>(&self.source, addr)
     }
 
-    fn get_execute_data<T>(&self, source: &T, addr: usize) -> php73::zend_execute_data
-    where T: CopyAddress
+    fn get_execute_data(&self, addr: usize) -> php73::zend_execute_data
     {
-        read_memory::<T, php73::zend_execute_data>(source, addr)
+        read_memory::<php73::zend_execute_data>(&self.source, addr)
     }
 
-    fn get_function<T>(&self, source: &T, addr: usize) -> php73::zend_function
-    where T: CopyAddress
+    fn get_function(&self, addr: usize) -> php73::zend_function
     {
-        read_memory::<T, php73::zend_function>(source, addr)
+        read_memory::<php73::zend_function>(&self.source, addr)
     }
 
-    fn get_string<T>(&self, source: &T, addr: usize) -> String
-    where T: CopyAddress
+    fn get_string(&self, addr: usize) -> String
     {
-        let zend_str = read_memory::<T, php73::zend_string>(source, addr);
+        let zend_str = read_memory::<php73::zend_string>(&self.source, addr);
         let offset = unsafe { &(*(::std::ptr::null::<php73::zend_string>())).val as *const _ as usize };
 
-        let val = copy_address(addr + offset, zend_str.len, source).unwrap();
+        let val = copy_address(addr + offset, zend_str.len, &self.source).unwrap();
         unsafe { String::from_utf8_unchecked(val) }
     }
 }
 
+impl ProcessReader for PHP730 {
 
-impl ProcessReader<
-    php72::zend_executor_globals,
-    php72::zend_execute_data,
-    php72::zend_function,
-    php72::zend_string> for PHP720 {
-    fn get_executor_global<T>(&self, source: &T, addr: usize) -> php72::zend_executor_globals
-    where T: CopyAddress
+    fn read(&self, addr: usize) -> Trace
     {
-        read_memory::<T, php72::zend_executor_globals>(source, addr)
+        let eg = self.get_executor_global(addr);
+        let mut ex_addr = eg.current_execute_data as usize;
+
+        let mut output = String::new();
+
+        while ex_addr != 0 {
+            let ex = self.get_execute_data(ex_addr);
+
+            let func_addr = ex.func as usize;
+            if func_addr == 0 {
+                break
+            };
+
+            let func = self.get_function(func_addr);
+
+            unsafe {
+                if func.common.scope as usize != 0 {
+                    let ce = read_memory::<php73::zend_class_entry>(&self.source, func.common.scope as usize);
+                    let scope = self.get_string(ce.name as usize);
+                    output = output + &scope + "::";
+                }
+            }
+
+            let function_name_addr = unsafe { func.common.function_name as usize };
+            if function_name_addr == 0 {
+                output = output + "main()";
+            } else {
+                let name = self.get_string(function_name_addr);
+                output = output + &name + "()\n";
+            }
+
+            ex_addr = ex.prev_execute_data as usize;
+        }
+        println!("{}", output);
+        Trace{}
+    }
+}
+
+impl PHP720 {
+    fn get_executor_global(&self, addr: usize) -> php72::zend_executor_globals
+    {
+        read_memory::<php72::zend_executor_globals>(&self.source, addr)
     }
 
-    fn get_execute_data<T>(&self, source: &T, addr: usize) -> php72::zend_execute_data
-    where T: CopyAddress
+    fn get_execute_data(&self, addr: usize) -> php72::zend_execute_data
     {
-        read_memory::<T, php72::zend_execute_data>(source, addr)
+        read_memory::<php72::zend_execute_data>(&self.source, addr)
     }
 
-    fn get_function<T>(&self, source: &T, addr: usize) -> php72::zend_function
-    where T: CopyAddress
+    fn get_function(&self, addr: usize) -> php72::zend_function
     {
-        read_memory::<T, php72::zend_function>(source, addr)
+        read_memory::<php72::zend_function>(&self.source, addr)
     }
 
-    fn get_string<T>(&self, source: &T, addr: usize) -> String
-    where T: CopyAddress
+    fn get_string(&self, addr: usize) -> String
     {
-        let zend_str = read_memory::<T, php72::zend_string>(source, addr);
+        let zend_str = read_memory::<php72::zend_string>(&self.source, addr);
         let offset = unsafe { &(*(::std::ptr::null::<php72::zend_string>())).val as *const _ as usize };
 
-        let val = copy_address(addr + offset, zend_str.len, source).unwrap();
+        let val = copy_address(addr + offset, zend_str.len, &self.source).unwrap();
         unsafe { String::from_utf8_unchecked(val) }
     }
 }
 
+impl ProcessReader for PHP720 {
 
-fn read_memory<T, R>(source: &T, addr: usize) -> R
-where T: CopyAddress, R: Copy
+    fn read(&self, addr: usize) -> Trace
+    {
+        let eg = self.get_executor_global(addr);
+        let mut ex_addr = eg.current_execute_data as usize;
+
+        let mut output = String::new();
+
+        while ex_addr != 0 {
+            let ex = self.get_execute_data(ex_addr);
+
+            let func_addr = ex.func as usize;
+            if func_addr == 0 {
+                break
+            };
+
+            let func = self.get_function(func_addr);
+
+            unsafe {
+                if func.common.scope as usize != 0 {
+                    let ce = read_memory::<php73::zend_class_entry>(&self.source, func.common.scope as usize);
+                    let scope = self.get_string(ce.name as usize);
+                    output = output + &scope + "::";
+                }
+            }
+
+            let function_name_addr = unsafe { func.common.function_name as usize };
+            if function_name_addr == 0 {
+                output = output + "main()";
+            } else {
+                let name = self.get_string(function_name_addr);
+                output = output + &name + "()\n";
+            }
+            ex_addr = ex.prev_execute_data as usize;
+        }
+        println!("{}", output);
+        Trace{}
+    }
+}
+
+impl PHP560 {
+
+    fn get_executor_global(&self, addr: usize) -> php56::zend_executor_globals
+    {
+        read_memory::<php56::zend_executor_globals>(&self.source, addr)
+    }
+
+    fn get_execute_data(&self, addr: usize) -> php56::zend_execute_data
+    {
+        read_memory::<php56::zend_execute_data>(&self.source, addr)
+    }
+
+    fn get_function(&self, addr: usize) -> php56::zend_function
+    {
+        read_memory::<php56::zend_function>(&self.source, addr)
+    }
+
+    fn get_string(&self, addr: usize) -> String
+    {
+        return read_cstr(&self.source, addr);
+    }
+}
+
+impl ProcessReader for PHP560 {
+
+    fn read(&self, addr: usize) -> Trace
+    {
+        let eg = self.get_executor_global(addr);
+        let mut ex_addr = eg.current_execute_data as usize;
+
+        let mut output = String::new();
+
+        while ex_addr != 0 {
+            let ex = self.get_execute_data(ex_addr);
+
+            let func_addr = ex.function_state.function as usize;
+            if func_addr == 0 {
+                break
+            };
+
+            let func = self.get_function(func_addr);
+
+            unsafe {
+                if func.common.scope as usize != 0 {
+                    let ce = read_memory::<php56::zend_class_entry>(&self.source, func.common.scope as usize);
+                    let scope = read_cstr(&self.source, ce.name as usize);
+                    output = output + &scope + "::";
+                }
+            }
+
+            let function_name_addr = unsafe { func.common.function_name as usize };
+            if function_name_addr == 0 {
+                output = output + "main()";
+            } else {
+                let name = self.get_string(function_name_addr);
+                output = output + &name + "()\n";
+            }
+            ex_addr = ex.prev_execute_data as usize;
+        }
+        print!("{}", output);
+        Trace{}
+    }
+}
+
+fn read_memory<R>(source: &ProcessHandle, addr: usize) -> R
+where R: Copy
 {
     let size = size_of::<R>();
     let bytes = copy_address(addr, size, source).unwrap();
     let bytes_ptr: *mut R = unsafe { transmute(bytes.as_ptr()) };
     return unsafe { (*bytes_ptr) };
+}
+
+fn read_cstr(source: &ProcessHandle, addr: usize) -> String
+{
+    let mut result = String::new();
+    let mut i = 0;
+    loop {
+        let c = copy_address(addr + i, 1, source).unwrap()[0];
+        if c == 0 {
+            return result;
+        } else {
+            result.push(c as char);
+            i = i + 1;
+        }
+    }
 }

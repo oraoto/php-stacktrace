@@ -5,14 +5,13 @@ Read stacktrace from outside PHP process, inspired by [ruby-stacktrace](https://
 # Install
 
 1. [Download](https://github.com/oraoto/php-stacktrace/releases) or build `php-stacktrace`
-1. Optional: Install debuginfo for php, `sudo dnf debuginfo-install php-debuginfo`. Find debuginfo path, eg, `/usr/lib/debug/.dwz/php71u-7.1.9-2.ius.centos7.x86_64`
 
 # Build from source
 
-You need a nightly version of Rust to compile. With `rustup`, you can:
+You need a latest stable version of Rust to compile. With `rustup`, you can:
 
 ```
-rustup default nightly && rustup update
+rustup default stable && rustup update
 ```
 
 To clone and build this project:
@@ -26,92 +25,46 @@ cargo build
 # Usage
 
 ```
-$ ./php-stacktrace --help
-php-stacktrace 0.1.2
+./php-stacktrace --help
+php-stacktrace 0.2.0
 Read stacktrace from outside PHP process
 
 USAGE:
-    php-stacktrace [FLAGS] [OPTIONS] <PID>
+    php-stacktrace [OPTIONS] <PID>
 
 FLAGS:
-    -a               Attch to process
     -h, --help       Prints help information
     -V, --version    Prints version information
 
 OPTIONS:
-    -c <config_path>              Path to config file, conflicts with -d, -w
-    -d <debuginfo_path>           Path to php debuginfo
-    -w <write_config_path>        Write config to file, requires -d
+    -v <php_version>        PHP Version (5.6, 7.2, 7.3) [default: 7.3]
 
 ARGS:
     <PID>    PID of the PHP process
+
 ```
-
-## Get stacktrace with config (faster)
-
-~~~
-./php-stacktrace -c <path to config> <pid>
-~~~
 
 For a running Laravel queue worker, the output looks like:
 
 ~~~
 sleep()
-Illuminate\Queue\Worker->sleep()
-Illuminate\Queue\Worker->daemon()
-Illuminate\Queue\Console\WorkCommand->runWorker()
-Illuminate\Queue\Console\WorkCommand->handle()
+Illuminate\Queue\Worker::sleep()
+Illuminate\Queue\Worker::daemon()
+Illuminate\Queue\Console\WorkCommand::runWorker()
+Illuminate\Queue\Console\WorkCommand::handle()
 call_user_func_array()
-Illuminate\Container\BoundMethod->Illuminate\Container\{closure}()
-Illuminate\Container\BoundMethod->callBoundMethod()
-Illuminate\Container\BoundMethod->call()
-Illuminate\Container\Container->call()
-Illuminate\Console\Command->execute()
-Symfony\Component\Console\Command\Command->run()
-Illuminate\Console\Command->run()
-Symfony\Component\Console\Application->doRunCommand()
-Symfony\Component\Console\Application->doRun()
-Symfony\Component\Console\Application->run()
-Illuminate\Console\Application->run()
-Illuminate\Foundation\Console\Kernel->handle()
+Illuminate\Container\BoundMethod::Illuminate\Container\{closure}()
+Illuminate\Container\BoundMethod::callBoundMethod()
+Illuminate\Container\BoundMethod::call()
+Illuminate\Container\Container::call()
+Illuminate\Console\Command::execute()
+Symfony\Component\Console\Command\Command::run()
+Illuminate\Console\Command::run()
+Symfony\Component\Console\Application::doRunCommand()
+Symfony\Component\Console\Application::doRun()
+Symfony\Component\Console\Application::run()
+Illuminate\Console\Application::run()
+Illuminate\Foundation\Console\Kernel::handle()
 main()
-~~~
-
-Two default configs for PHP 7.1-7.3 are provided: [configs](./configs)
-
-## Get stacktrace with DWARF debuginfo
-
-In case the provided configs doesn't work with your PHP, you can use DWARF debuginfo to get the stacktrace and generate your config.
-
-~~~
-./php-stacktrace -d <path to debuginfo> <pid>
-~~~
-
-## Generate config
-
-~~~
-./php-stacktrace -d <path to debuginfo> -w <path to config> <pid>
-~~~
-
-The config file contains basic info of PHP struct and unions:
-
-~~~
-{
-  "eg_byte_size": 1552,
-  "eg_current_execute_data_offset": 480,
-  "eg_vm_stack_top_offset": 456,
-  "eg_vm_stack_end_offset": 464,
-  "eg_vm_stack_offset": 472,
-  "ed_byte_size": 80,
-  "ed_this_offset": 32,
-  "ed_func_offset": 24,
-  "ed_prev_execute_data_offset": 48,
-  "fu_function_name_offset": 8,
-  "fu_scope_offset": 16,
-  "zend_string_len_offset": 16,
-  "zend_string_val_offset": 24,
-  "stack_byte_size": 24,
-  "stack_end_offset": 8,
-  "ce_name_offset": 8
-}
+Time 168.07µs
 ~~~
