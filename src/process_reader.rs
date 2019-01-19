@@ -1,12 +1,13 @@
+#[allow(non_snake_case, non_camel_case_types, non_upper_case_globals)]
 
 extern crate read_process_memory;
 
-use php73;
-use php72;
-use php56;
+use crate::php73;
+use crate::php72;
+use crate::php56;
 
-use read_process_memory::*;
-use std::mem::*;
+use read_process_memory::{copy_address, ProcessHandle};
+use std::mem::{size_of, transmute};
 
 pub trait ProcessReader {
     fn read(&self, addr: usize) -> Trace;
@@ -175,7 +176,7 @@ impl PHP560 {
 
     fn get_string(&self, addr: usize) -> String
     {
-        return read_cstr(&self.source, addr);
+        read_cstr(&self.source, addr)
     }
 }
 
@@ -226,7 +227,7 @@ where R: Copy
     let size = size_of::<R>();
     let bytes = copy_address(addr, size, source).unwrap();
     let bytes_ptr: *mut R = unsafe { transmute(bytes.as_ptr()) };
-    return unsafe { (*bytes_ptr) };
+    unsafe { (*bytes_ptr) }
 }
 
 fn read_cstr(source: &ProcessHandle, addr: usize) -> String

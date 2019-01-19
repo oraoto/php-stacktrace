@@ -3,7 +3,6 @@
 extern crate serde_derive;
 
 mod debuginfo;
-mod dwarf;
 mod attach;
 mod process_reader;
 mod php73;
@@ -20,17 +19,17 @@ extern crate regex;
 use read_process_memory::*;
 use std::time;
 use clap::{App, Arg, ArgMatches};
-use debuginfo::*;
-use process_reader::ProcessReader;
+use crate::debuginfo::*;
+use crate::process_reader::ProcessReader;
 
 fn create_reader(version: &str, source: ProcessHandle) -> Box<ProcessReader>
 {
     if version == "5.6" {
-        return Box::new(process_reader::PHP560{source: source});
+        Box::new(process_reader::PHP560{source})
     } else if version == "7.2" {
-        return Box::new(process_reader::PHP720{source: source});
+        Box::new(process_reader::PHP720{source})
     } else {
-        return Box::new(process_reader::PHP730{source: source});
+        Box::new(process_reader::PHP730{source})
     }
 }
 

@@ -9,9 +9,7 @@ license = "MIT"
 description = "Read stacktrace from outside PHP process"
 
 [dependencies]
-elf = "0.0.10"
 regex = "1.1.0"
-gimli = "0.16.1"
 byteorder = "1.1.0"
 read-process-memory = "0.1.2"
 libc = "0.2.45"
