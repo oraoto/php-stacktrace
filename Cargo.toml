@@ -7,6 +7,7 @@ keywords = ["php", "debug", "stacktrace"]
 readme = "Readme.md"
 license = "MIT"
 description = "Read stacktrace from outside PHP process"
+edition = "2018"
 
 [dependencies]
 regex = "1.1.0"

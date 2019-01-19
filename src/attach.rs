@@ -1,5 +1,5 @@
-extern crate libc;
-extern crate read_process_memory;
+use libc;
+use read_process_memory;
 
 use libc::{c_int, c_long};
 

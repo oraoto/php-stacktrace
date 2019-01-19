@@ -9,11 +9,11 @@ mod php73;
 mod php72;
 mod php56;
 
-extern crate byteorder;
-extern crate clap;
-extern crate libc;
-extern crate read_process_memory;
-extern crate regex;
+
+
+
+
+
 
 
 use read_process_memory::*;
@@ -22,7 +22,7 @@ use clap::{App, Arg, ArgMatches};
 use crate::debuginfo::*;
 use crate::process_reader::ProcessReader;
 
-fn create_reader(version: &str, source: ProcessHandle) -> Box<ProcessReader>
+fn create_reader(version: &str, source: ProcessHandle) -> Box<dyn ProcessReader>
 {
     if version == "5.6" {
         Box::new(process_reader::PHP560{source})
