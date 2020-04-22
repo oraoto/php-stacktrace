@@ -1,20 +1,9 @@
-
-#[macro_use]
-extern crate serde_derive;
-
 mod debuginfo;
 mod attach;
 mod process_reader;
 mod php73;
 mod php72;
 mod php56;
-
-
-
-
-
-
-
 
 use read_process_memory::*;
 use std::time;
@@ -42,7 +31,7 @@ fn main()
     let source = pid.try_into_process_handle().unwrap();
 
     let addr = get_executor_globals_address(source);
-  
+
     let php_version = matches.value_of("PHP Version").unwrap();
     let php = create_reader(php_version, source);
 

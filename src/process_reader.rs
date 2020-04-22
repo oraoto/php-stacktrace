@@ -227,7 +227,7 @@ where R: Copy
     let size = size_of::<R>();
     let bytes = copy_address(addr, size, source).unwrap();
     let bytes_ptr: *mut R = unsafe { transmute(bytes.as_ptr()) };
-    unsafe { (*bytes_ptr) }
+    unsafe { *bytes_ptr }
 }
 
 fn read_cstr(source: &ProcessHandle, addr: usize) -> String

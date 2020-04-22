@@ -4,17 +4,11 @@ Read stacktrace from outside PHP process, inspired by [ruby-stacktrace](https://
 
 # Install
 
-1. [Download](https://github.com/oraoto/php-stacktrace/releases) or build `php-stacktrace`
+1. [Download](https://github.com/oraoto/php-stacktrace/releases) or build `php-stacktrace` from source
 
-# Build from source
+## Build from source
 
-You need a latest stable version of Rust to compile. With `rustup`, you can:
-
-```
-rustup default stable && rustup update
-```
-
-To clone and build this project:
+Clone and build this project:
 
 ```
 git clone https://github.com/oraoto/php-stacktrace.git
@@ -47,13 +41,17 @@ ARGS:
 For a running Laravel queue worker, the output looks like:
 
 ~~~
-sleep()
-Illuminate\Queue\Worker::sleep()
-Illuminate\Queue\Worker::daemon()
-Illuminate\Queue\Console\WorkCommand::runWorker()
-Illuminate\Queue\Console\WorkCommand::handle()
+stream_select()
+Symfony\Component\Process\Pipes\UnixPipes::readAndWrite()
+Symfony\Component\Process\Process::readPipes()
+Symfony\Component\Process\Process::wait()
+Symfony\Component\Process\Process::run()
+Illuminate\Queue\Listener::runProcess()
+Illuminate\Queue\Listener::listen()
+Illuminate\Queue\Console\ListenCommand::handle()
 call_user_func_array()
 Illuminate\Container\BoundMethod::Illuminate\Container\{closure}()
+Illuminate\Container\Util::unwrapIfClosure()
 Illuminate\Container\BoundMethod::callBoundMethod()
 Illuminate\Container\BoundMethod::call()
 Illuminate\Container\Container::call()
@@ -64,7 +62,7 @@ Symfony\Component\Console\Application::doRunCommand()
 Symfony\Component\Console\Application::doRun()
 Symfony\Component\Console\Application::run()
 Illuminate\Console\Application::run()
-Illuminate\Foundation\Console\Kernel::handle()
+Laravel\Lumen\Console\Kernel::handle()
 main()
-Time 168.07µs
+Time 124.716µs
 ~~~
